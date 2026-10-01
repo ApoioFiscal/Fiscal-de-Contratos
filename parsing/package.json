@@ -1,0 +1,35 @@
+{
+  "name": "parsing-dos-dados",
+  "version": "1.0.0",
+  "description": "Backend Node.js com TypeScript para extrair dados de PDFs por regras ou Ollama e salvá-los no PostgreSQL.",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "ts-node --transpile-only src/index.ts",
+    "db:init": "ts-node --transpile-only src/scripts/initDb.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "test": "node --test -r ts-node/register src/services/rulesParserService.test.ts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "multer": "^2.1.1",
+    "pdf-parse": "^2.4.5",
+    "pg": "^8.20.0"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/multer": "^2.1.0",
+    "@types/node": "^25.9.5",
+    "@types/pdf-parse": "^1.1.5",
+    "@types/pg": "^8.20.0",
+    "ts-node": "10.9.2",
+    "typescript": "^6.0.3"
+  }
+}

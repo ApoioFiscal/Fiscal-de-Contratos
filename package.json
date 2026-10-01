@@ -1,0 +1,16 @@
+{
+  "name": "fiscal-de-contratos",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Sistema Integrado de Gestão de Licitações, Contratos e Pedidos — monorepo com backend, frontend e parsing de PDFs",
+  "scripts": {
+    "install:all": "npm --prefix backend install && npm --prefix frontend install && npm --prefix parsing install",
+    "predev": "npm --prefix parsing run db:init",
+    "dev": "concurrently -n backend,frontend,parsing -c blue,green,magenta \"npm --prefix backend run dev\" \"npm --prefix frontend run dev\" \"npm --prefix parsing run dev\"",
+    "build": "npm --prefix backend run build && npm --prefix frontend run build && npm --prefix parsing run build",
+    "test:parsing": "npm --prefix parsing test"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.0"
+  }
+}

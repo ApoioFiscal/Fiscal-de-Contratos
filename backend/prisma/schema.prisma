@@ -1,0 +1,325 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+//  Tabela de setores
+model Setor {
+  id           Int      @id @default(autoincrement())
+  nome         String
+  sigla        String   @unique
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  // Relacionamento com a tabela Usuario
+  usuarios Usuario[]
+
+  // Secretarias beneficiárias de contratos
+  licitacoes LicitacaoSetor[]
+
+  // Pedidos solicitados por este setor
+  pedidosSolicitados Pedido[] @relation("SolicitantePedido")
+
+  @@map("setor")
+}
+
+// Tabela de usuários
+model Usuario {
+  id           Int           @id @default(autoincrement())
+  idSetor      Int
+  nome         String
+  email        String        @unique
+  senha        String
+  funcao       FuncaoUsuario
+  isAdmin      Boolean       @default(false)
+  criadoEm     DateTime      @default(now())
+  atualizadoEm DateTime      @updatedAt
+
+  setor Setor @relation(fields: [idSetor], references: [id])
+
+  // Pedidos criados por este usuário
+  pedidosCriados Pedido[]
+
+  // Avaliações feitas por este usuário (fiscal de contratos)
+  avaliacoesFeitas Avaliacao[]
+
+  // Termos de renovação emitidos por este usuário (FCON)
+  termosEmitidos TermoRenovacao[] @relation("TermoEmissor")
+
+  // Termos de renovação resolvidos por este usuário (LIC)
+  termosResolvidos TermoRenovacao[] @relation("TermoResolvido")
+
+  @@index([idSetor])
+  @@map("usuario")
+}
+
+// Enum para as funções dos usuários
+enum FuncaoUsuario {
+  PREFEITO
+  SECRETARIO
+  SERVIDOR
+  FISCAL
+}
+
+// Situação de um contrato/licitação
+enum StatusContrato {
+  RASCUNHO
+  ATIVA
+  EM_ADITAMENTO
+  ENCERRADA
+  VENCIDA
+}
+
+// Ciclo de vida do pedido na Fiscalização de Contratos
+enum StatusPedido {
+  PENDENTE
+  EM_COMPRA
+  ENTREGUE
+  CONCLUIDO
+  RECUSADO
+  DEVOLVIDO
+  CANCELADO
+}
+
+// Tipo de renovação de contrato
+enum TipoRenovacao {
+  VIGENCIA
+  QUANTITATIVO
+  FINANCEIRO
+}
+
+// Situação do termo interno de renovação
+enum StatusTermoRenovacao {
+  EMITIDO
+  EM_ANALISE
+  RESOLVIDO
+  ARQUIVADO
+}
+
+// Ação registrada pela Secretaria de Licitações ao resolver o termo
+enum AcaoTomada {
+  ADITIVO_VIGENCIA
+  ADITIVO_QUANTITATIVO
+  ADITIVO_FINANCEIRO
+  NOVA_LICITACAO
+  DENEGADO
+}
+
+// Movimentação de estoque: entrada (nota fiscal) ou baixa (consumo)
+enum TipoMovimentacao {
+  ENTRADA
+  BAIXA
+}
+
+// Tabela de licitações/contratos
+model LicitacaoContrato {
+  id             Int           @id @default(autoincrement())
+  numero         String        @unique
+  numeroProcesso String
+  modalidade     String
+  objeto         String
+  fornecedor     String
+  cnpjFornecedor String
+  dataAbertura   DateTime
+  dataVigenciaFim DateTime
+  status         StatusContrato @default(RASCUNHO)
+  valorTotal     Float
+  arquivoContrato String?
+  dataGeracaoContrato DateTime?
+
+  itens ItemLicitado[]
+  setores LicitacaoSetor[]
+  pedidos Pedido[]
+  notasFiscais NotaFiscal[]
+  avaliacoes Avaliacao[]
+  termosRenovacao TermoRenovacao[]
+
+  @@map("licitacao")
+}
+
+// Tabela de itens licitados
+model ItemLicitado {
+  id            Int    @id @default(autoincrement())
+  idLicitacao   Int
+  descricao     String
+  marca         String
+  unidade       String
+  quantidade    Int
+  precoUnitario Float
+  precoTotal    Float
+  recebido      Int    @default(0)
+  consumido     Int    @default(0)
+
+  licitacao LicitacaoContrato @relation(fields: [idLicitacao], references: [id])
+  pedidoItems PedidoItem[]
+  notaFiscalItems NotaFiscalItem[]
+  movimentacoes MovimentacaoEstoque[]
+
+  @@index([idLicitacao])
+  @@map("item_licitado")
+}
+
+// Join entre licitação e secretarias beneficiárias
+model LicitacaoSetor {
+  id          Int @id @default(autoincrement())
+  idLicitacao Int
+  idSetor     Int
+
+  licitacao LicitacaoContrato @relation(fields: [idLicitacao], references: [id])
+  setor Setor @relation(fields: [idSetor], references: [id])
+
+  @@unique([idLicitacao, idSetor])
+  @@index([idSetor])
+  @@map("licitacao_setor")
+}
+
+// Tabela de pedidos (solicitações de secretarias)
+model Pedido {
+  id                 Int          @id @default(autoincrement())
+  idUsuarioCriador   Int
+  idSetorCriador     Int
+  idContrato         Int
+  numeroPedido       String       @unique
+  dataPedido         DateTime     @default(now())
+  dataPrevistaEntrega DateTime?
+  status             StatusPedido @default(PENDENTE)
+  numeroOrdem        String?
+  dataOrdem          DateTime?
+  observacao         String?
+
+  usuario Usuario @relation(fields: [idUsuarioCriador], references: [id])
+  setor Setor @relation("SolicitantePedido", fields: [idSetorCriador], references: [id])
+  contrato LicitacaoContrato @relation(fields: [idContrato], references: [id])
+
+  itens PedidoItem[]
+  notasFiscais NotaFiscal[]
+  avaliacoes Avaliacao[]
+  movimentacoes MovimentacaoEstoque[]
+
+  @@index([idSetorCriador])
+  @@index([idContrato])
+  @@map("pedido")
+}
+
+// Itens de um pedido
+model PedidoItem {
+  id             Int    @id @default(autoincrement())
+  idPedido       Int
+  idItemLicitado Int
+  quantidade     Int
+  valorUnitario  Float
+  valorTotal     Float
+
+  pedido Pedido @relation(fields: [idPedido], references: [id])
+  itemLicitado ItemLicitado @relation(fields: [idItemLicitado], references: [id])
+
+  @@index([idPedido])
+  @@index([idItemLicitado])
+  @@map("pedido_item")
+}
+
+// Notas fiscais de entrada registradas pela FCON
+model NotaFiscal {
+  id         Int      @id @default(autoincrement())
+  idPedido   Int
+  idContrato Int
+  numeroNota String
+  dataEmissao DateTime
+  dataEntrada DateTime @default(now())
+  observacao String?
+
+  pedido Pedido @relation(fields: [idPedido], references: [id])
+  contrato LicitacaoContrato @relation(fields: [idContrato], references: [id])
+
+  itens NotaFiscalItem[]
+  movimentacoes MovimentacaoEstoque[]
+
+  @@index([idPedido])
+  @@map("nota_fiscal")
+}
+
+// Itens de uma nota fiscal de entrada
+model NotaFiscalItem {
+  id             Int    @id @default(autoincrement())
+  idNotaFiscal   Int
+  idItemLicitado Int
+  quantidade     Int
+  valorUnitario  Float
+
+  notaFiscal NotaFiscal @relation(fields: [idNotaFiscal], references: [id])
+  itemLicitado ItemLicitado @relation(fields: [idItemLicitado], references: [id])
+
+  @@index([idNotaFiscal])
+  @@index([idItemLicitado])
+  @@map("nota_fiscal_item")
+}
+
+// Movimentação de estoque (entrada/baixa) do item licitado
+model MovimentacaoEstoque {
+  id             Int              @id @default(autoincrement())
+  tipo           TipoMovimentacao
+  idItemLicitado Int
+  quantidade     Int
+  idNotaFiscal   Int?
+  idPedido       Int?
+  data           DateTime         @default(now())
+  observacao     String?
+
+  itemLicitado ItemLicitado @relation(fields: [idItemLicitado], references: [id])
+  notaFiscal NotaFiscal? @relation(fields: [idNotaFiscal], references: [id])
+  pedido Pedido? @relation(fields: [idPedido], references: [id])
+
+  @@index([idItemLicitado])
+  @@index([idNotaFiscal])
+  @@map("movimentacao_estoque")
+}
+
+// Avaliação do fornecedor a partir de uma entrega/pedido
+model Avaliacao {
+  id               Int      @id @default(autoincrement())
+  idPedido         Int
+  idContrato       Int
+  idUsuarioFiscal  Int
+  dataAvaliacao    DateTime @default(now())
+  notaEntrega      Int
+  notaPrazo        Int
+  possuiProblema   Boolean  @default(false)
+  descricaoProblema String?
+  observacao       String?
+
+  pedido Pedido @relation(fields: [idPedido], references: [id])
+  contrato LicitacaoContrato @relation(fields: [idContrato], references: [id])
+  usuarioFiscal Usuario @relation(fields: [idUsuarioFiscal], references: [id])
+
+  @@index([idContrato])
+  @@index([idPedido])
+  @@map("avaliacao")
+}
+
+// Termo interno de renovação emitido pela FCON à Secretaria de Licitações
+model TermoRenovacao {
+  id                 Int                   @id @default(autoincrement())
+  idContrato         Int
+  idUsuarioEmissor   Int
+  tipo               TipoRenovacao
+  status             StatusTermoRenovacao  @default(EMITIDO)
+  justificativa      String
+  novaVigenciaFim    DateTime?
+  percentualAcrescimo Float?
+  parecerLicitacao   String?
+  acaoTomada         AcaoTomada?
+  idUsuarioLicitacao Int?
+  dataEmissao        DateTime              @default(now())
+  dataResolucao      DateTime?
+
+  contrato LicitacaoContrato @relation(fields: [idContrato], references: [id])
+  usuarioEmissor Usuario @relation("TermoEmissor", fields: [idUsuarioEmissor], references: [id])
+  usuarioLicitacao Usuario? @relation("TermoResolvido", fields: [idUsuarioLicitacao], references: [id])
+
+  @@index([idContrato])
+  @@index([status])
+  @@map("termo_renovacao")
+}
