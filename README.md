@@ -80,8 +80,6 @@ Além dele, o seed garante os setores `GAB`, `LIC` e `FCON`, e duas licitações
 npm --prefix backend run seed
 ```
 
-*Nota: o backend não tem script `seed` por padrão; o comando documentado no AGENTS.md é `npx ts-node-dev --transpile-only prisma/seed.ts`.*
-
 ## Comandos úteis
 
 | Ação                          | Comando                                                     |
