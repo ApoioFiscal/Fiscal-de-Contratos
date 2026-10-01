@@ -1,6 +1,9 @@
 # Dependências
 node_modules/
 
+# Contexto interno de agentes/assistente (não versionar)
+AGENTS.md
+
 # Builds
 dist/
 dist-ssr/
