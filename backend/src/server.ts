@@ -13,6 +13,15 @@ app.use(cors());
 app.use(express.json());
 app.use("/api", router);
 
+// Health check para monitoramento externo (Render/Vercel/professor)
+app.get("/health", (_req, res) => {
+  res.json({ status: "ok" });
+});
+// Também exposto sob /api para quem só conhece o prefixo dos endpoints
+app.get("/api/health", (_req, res) => {
+  res.json({ status: "ok" });
+});
+
 // Middleware de tratamento de erros 
 app.use(errorHandler);
 
