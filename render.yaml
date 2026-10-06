@@ -2,7 +2,7 @@
 #
 # Aplicar via: Render Dashboard -> New + -> Blueprint -> escolher este repositório.
 # O blueprint cria o banco Postgres gerenciado, o serviço do backend e o do
-# parsing, e injeta a DATABASE_URL automaticamente em cada serviço.
+# parsing, e injeta a DATABASE_URL automaticamente em cada serviço (fromDatabase).
 
 databases:
   - name: fiscal-db
@@ -10,9 +10,10 @@ databases:
     region: oregon
     databaseName: prefeitura
     user: fiscal
-    version: "15"
+    postgresMajorVersion: "15"
 
 services:
+  # API apoiofiscal (Express + Prisma). Schema e seed são aplicados antes de subir.
   - type: web
     name: apoiofiscal-backend
     runtime: node
@@ -21,18 +22,22 @@ services:
     region: oregon
     buildCommand: npm install --include=dev && npx prisma generate && npm run build
     startCommand: npm run start
-    databases:
-      - database: fiscal-db
+    # Após o build e antes do start: cria/atualiza o schema (db push, idempotente)
+    # e garante setores, admin e licitações de exemplo (seed idempotente).
+    preDeployCommand: npx prisma db push && npx prisma db seed
     envVars:
       - key: NODE_ENV
         value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: fiscal-db
+          property: connectionString
       # Gerar em: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
       # Depois preencher em Services -> apoiofiscal-backend -> Environment.
       - key: JWT_SECRET
         sync: false
-    # Cria/atualiza o schema (db push) e garante setores, admin e exemplos (seed idempotente).
-    postDeployCommand: npx prisma db push && npx prisma db seed
 
+  # API de parsing de PDF (Express + pg). Garante a tabela pdf_data antes de subir.
   - type: web
     name: apoiofiscal-parsing
     runtime: node
@@ -41,12 +46,14 @@ services:
     region: oregon
     buildCommand: npm install --include=dev && npm run build
     startCommand: npm run start
-    databases:
-      - database: fiscal-db
+    # Mesmo banco "prefeitura" do backend; db:init é idempotente.
+    preDeployCommand: npm run db:init
     envVars:
       - key: NODE_ENV
         value: production
       - key: PARSER_MODE
         value: rules
-    # Garante a tabela pdf_data (mesmo banco "prefeitura" do backend).
-    postDeployCommand: npm run db:init
+      - key: DATABASE_URL
+        fromDatabase:
+          name: fiscal-db
+          property: connectionString
