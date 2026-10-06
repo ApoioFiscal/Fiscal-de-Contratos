@@ -18,6 +18,8 @@ interface SecretariatOpt {
 
 const UNITS = ["Un", "Cx", "Kg", "L", "m²", "m³", "Saco", "Pct", "Par", "Resma"];
 
+const PARSING_BASE_URL = import.meta.env.VITE_PARSING_URL ?? "http://localhost:3000";
+
 const emptyDraftItem = () => ({
   _key: crypto.randomUUID(),
   name: "",
@@ -177,7 +179,7 @@ export function Biddings() {
     formData.append("file", file);
 
     try {
-      const response = await fetch("http://localhost:3000/upload", {
+      const response = await fetch(`${PARSING_BASE_URL}/upload`, {
         method: "POST",
         body: formData,
       });

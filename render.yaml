@@ -1,0 +1,52 @@
+# Blueprint do Render — Fiscal de Contratos
+#
+# Aplicar via: Render Dashboard -> New + -> Blueprint -> escolher este repositório.
+# O blueprint cria o banco Postgres gerenciado, o serviço do backend e o do
+# parsing, e injeta a DATABASE_URL automaticamente em cada serviço.
+
+databases:
+  - name: fiscal-db
+    plan: free
+    region: oregon
+    databaseName: prefeitura
+    user: fiscal
+    version: "15"
+
+services:
+  - type: web
+    name: apoiofiscal-backend
+    runtime: node
+    rootDir: backend
+    plan: free
+    region: oregon
+    buildCommand: npm install --include=dev && npx prisma generate && npm run build
+    startCommand: npm run start
+    databases:
+      - database: fiscal-db
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # Gerar em: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+      # Depois preencher em Services -> apoiofiscal-backend -> Environment.
+      - key: JWT_SECRET
+        sync: false
+    # Cria/atualiza o schema (db push) e garante setores, admin e exemplos (seed idempotente).
+    postDeployCommand: npx prisma db push && npx prisma db seed
+
+  - type: web
+    name: apoiofiscal-parsing
+    runtime: node
+    rootDir: parsing
+    plan: free
+    region: oregon
+    buildCommand: npm install --include=dev && npm run build
+    startCommand: npm run start
+    databases:
+      - database: fiscal-db
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PARSER_MODE
+        value: rules
+    # Garante a tabela pdf_data (mesmo banco "prefeitura" do backend).
+    postDeployCommand: npm run db:init
