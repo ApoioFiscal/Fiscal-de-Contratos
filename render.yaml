@@ -13,18 +13,17 @@ databases:
     postgresMajorVersion: "15"
 
 services:
-  # API apoiofiscal (Express + Prisma). Schema e seed são aplicados antes de subir.
+  # API apoiofiscal (Express + Prisma). Schema e seed são aplicados durante o build.
   - type: web
     name: apoiofiscal-backend
     runtime: node
     rootDir: backend
     plan: free
     region: oregon
-    buildCommand: npm install --include=dev && npx prisma generate && npm run build
+    # db push + seed rodam no build (free tier não suporta preDeployCommand);
+    # ambos são idempotentes, então rodam a cada deploy sem efeitos colaterais.
+    buildCommand: npm install --include=dev && npx prisma generate && npx prisma db push && npx prisma db seed && npm run build
     startCommand: npm run start
-    # Após o build e antes do start: cria/atualiza o schema (db push, idempotente)
-    # e garante setores, admin e licitações de exemplo (seed idempotente).
-    preDeployCommand: npx prisma db push && npx prisma db seed
     envVars:
       - key: NODE_ENV
         value: production
@@ -37,17 +36,16 @@ services:
       - key: JWT_SECRET
         sync: false
 
-  # API de parsing de PDF (Express + pg). Garante a tabela pdf_data antes de subir.
+  # API de parsing de PDF (Express + pg). Garante a tabela pdf_data no build.
   - type: web
     name: apoiofiscal-parsing
     runtime: node
     rootDir: parsing
     plan: free
     region: oregon
-    buildCommand: npm install --include=dev && npm run build
+    # db:init é idempotente e garante a tabela pdf_data antes do start.
+    buildCommand: npm install --include=dev && npm run db:init && npm run build
     startCommand: npm run start
-    # Mesmo banco "prefeitura" do backend; db:init é idempotente.
-    preDeployCommand: npm run db:init
     envVars:
       - key: NODE_ENV
         value: production
