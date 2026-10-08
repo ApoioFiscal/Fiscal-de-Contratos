@@ -21,8 +21,9 @@ services:
     plan: free
     region: oregon
     # db push + seed rodam no build (free tier não suporta preDeployCommand);
-    # ambos são idempotentes, então rodam a cada deploy sem efeitos colaterais.
-    buildCommand: npm install --include=dev && npx prisma generate && npx prisma db push && npx prisma db seed && npm run build
+    # schema-clean.sh aplica o schema e, se o db push falhar por registro antigo
+    # (enum StatusPedido), limpa os pedidos antigos e tenta novamente.
+    buildCommand: npm install --include=dev && sh prisma/schema-clean.sh && npx prisma db seed && npm run build
     startCommand: npm run start
     envVars:
       - key: NODE_ENV
