@@ -16,11 +16,10 @@ const controller = new TermoRenovacaoController(service);
 
 export const termoRenovacaoRouter = Router();
 
-// FCON emite termo interno de renovação para a LIC
+// Qualquer secretaria beneficiária solicita termo de renovação para a Licitações
 termoRenovacaoRouter.post(
   "/",
   autenticationMiddleware,
-  requerPerfil("contratos", "fiscal", "gabinete"),
   validateBody(CreateTermoRenovacaoSchema),
   asyncHandler((req, res) => controller.emitir(req, res))
 );

@@ -7,7 +7,11 @@ export class TermoRenovacaoController {
   constructor(private service: TermoRenovacaoService) {}
 
   async emitir(req: Request, res: Response): Promise<void> {
-    const usuario = { id: req.user?.id as number };
+    const usuario = {
+      id: req.user?.id as number,
+      idSetor: req.user?.idSetor,
+      isAdmin: req.user?.isAdmin,
+    };
     const termo = await this.service.emitir(usuario, req.body);
     sendSuccess(res, termo, 201);
   }

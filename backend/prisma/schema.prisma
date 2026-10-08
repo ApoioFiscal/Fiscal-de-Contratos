@@ -23,6 +23,9 @@ model Setor {
   // Pedidos solicitados por este setor
   pedidosSolicitados Pedido[] @relation("SolicitantePedido")
 
+  // Termos de renovação solicitados por este setor
+  termosRenovacaoSolicitados TermoRenovacao[] @relation("SolicitanteTermo")
+
   @@map("setor")
 }
 
@@ -46,11 +49,14 @@ model Usuario {
   // Avaliações feitas por este usuário (fiscal de contratos)
   avaliacoesFeitas Avaliacao[]
 
-  // Termos de renovação emitidos por este usuário (FCON)
+  // Termos de renovação emitidos por este usuário (Secretaria solicitante)
   termosEmitidos TermoRenovacao[] @relation("TermoEmissor")
 
   // Termos de renovação resolvidos por este usuário (LIC)
   termosResolvidos TermoRenovacao[] @relation("TermoResolvido")
+
+  // Histórico do pedido registrado por este usuário
+  historicoPedidos PedidoHistorico[]
 
   @@index([idSetor])
   @@map("usuario")
@@ -76,12 +82,20 @@ enum StatusContrato {
 // Ciclo de vida do pedido na Fiscalização de Contratos
 enum StatusPedido {
   PENDENTE
-  EM_COMPRA
+  CONFIRMADO
+  EFETUADO
   ENTREGUE
+  CONFERENCIA
   CONCLUIDO
-  RECUSADO
   DEVOLVIDO
   CANCELADO
+}
+
+// Tipo de registro no histórico do pedido (timeline)
+enum TipoHistoricoPedido {
+  CRIACAO
+  STATUS
+  AVISO
 }
 
 // Tipo de renovação de contrato
@@ -198,10 +212,28 @@ model Pedido {
   notasFiscais NotaFiscal[]
   avaliacoes Avaliacao[]
   movimentacoes MovimentacaoEstoque[]
+  historico PedidoHistorico[]
 
   @@index([idSetorCriador])
   @@index([idContrato])
   @@map("pedido")
+}
+
+// Linha do tempo do pedido (mudanças de status e avisos do fiscal à secretaria)
+model PedidoHistorico {
+  id        Int                   @id @default(autoincrement())
+  idPedido  Int
+  tipo      TipoHistoricoPedido
+  status    StatusPedido?
+  mensagem  String?
+  idUsuario Int
+  data      DateTime              @default(now())
+
+  pedido Pedido @relation(fields: [idPedido], references: [id])
+  usuario Usuario @relation(fields: [idUsuario], references: [id])
+
+  @@index([idPedido])
+  @@map("pedido_historico")
 }
 
 // Itens de um pedido
@@ -299,11 +331,12 @@ model Avaliacao {
   @@map("avaliacao")
 }
 
-// Termo interno de renovação emitido pela FCON à Secretaria de Licitações
+// Termo interno de renovação solicitado por uma secretaria à Licitações
 model TermoRenovacao {
   id                 Int                   @id @default(autoincrement())
   idContrato         Int
   idUsuarioEmissor   Int
+  idSetorSolicitante Int?
   tipo               TipoRenovacao
   status             StatusTermoRenovacao  @default(EMITIDO)
   justificativa      String
@@ -318,6 +351,7 @@ model TermoRenovacao {
   contrato LicitacaoContrato @relation(fields: [idContrato], references: [id])
   usuarioEmissor Usuario @relation("TermoEmissor", fields: [idUsuarioEmissor], references: [id])
   usuarioLicitacao Usuario? @relation("TermoResolvido", fields: [idUsuarioLicitacao], references: [id])
+  setorSolicitante Setor? @relation("SolicitanteTermo", fields: [idSetorSolicitante], references: [id])
 
   @@index([idContrato])
   @@index([status])

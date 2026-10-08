@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { listarLicitacoes } from "@/services/licitacoes";
 import {
   listarTermos,
@@ -27,7 +27,7 @@ const statusChip: Record<StatusTermoRenovacao, string> = {
 export function Renovacoes() {
   const sessao = obterSessao();
   const perfil = sessao?.perfil || "secretaria";
-  const podeEmitir = perfil === "contratos" || perfil === "fiscal" || perfil === "gabinete";
+  const podeEmitir = perfil === "secretaria" || perfil === "gabinete";
   const podeResolver = perfil === "licitacoes" || perfil === "gabinete";
 
   const [termos, setTermos] = useState<TermoRenovacao[]>([]);
@@ -54,6 +54,16 @@ export function Renovacoes() {
     reload();
   }, [reload]);
 
+  const contratosEmitiveis = useMemo(
+    () =>
+      sessao?.isAdmin
+        ? contratos
+        : contratos.filter(
+            (c) => c.status === "ATIVA" && c.setores.some((s) => s.idSetor === sessao?.idSetor)
+          ),
+    [contratos, sessao?.isAdmin, sessao?.idSetor]
+  );
+
   const abrirResolver = (termo: TermoRenovacao) => {
     setTermoAtual(termo);
     setIsResolverOpen(true);
@@ -65,10 +75,10 @@ export function Renovacoes() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Termos de Renovação</h1>
           <p className="text-sm text-slate-500 mt-1">
-            {podeEmitir
-              ? "Emita termos de renovação de vigência, quantidade ou financeiros."
-              : podeResolver
-                ? "Analise e resolva os termos emitidos pela Fiscalização de Contratos."
+            {podeResolver
+              ? "Analise e resolva os termos de renovação solicitados pelas secretarias."
+              : podeEmitir
+                ? "Solicite termos de renovação de vigência, quantidade ou financeiros para a Secretaria de Licitações."
                 : "Acompanhamento de termos de renovação contratual."}
           </p>
         </div>
@@ -78,7 +88,7 @@ export function Renovacoes() {
             className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors"
           >
             <Plus className="w-4 h-4" />
-            Emitir Termo
+            Solicitar Termo
           </button>
         )}
       </div>
@@ -115,7 +125,10 @@ export function Renovacoes() {
                     <p className="text-sm text-slate-600 mt-1 line-clamp-2">{t.justificativa}</p>
                     <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
                       <span>Tipo: {TIPO_RENOVACAO_LABEL[t.tipo]}</span>
-                      <span>Emitido: {format(parseISO(t.dataEmissao), "dd/MM/yyyy")} por {t.usuarioEmissor?.nome}</span>
+                      <span>
+                        Solicitado: {format(parseISO(t.dataEmissao), "dd/MM/yyyy")} por{" "}
+                        {t.setorSolicitante?.sigla || t.setorSolicitante?.nome || t.usuarioEmissor?.nome}
+                      </span>
                       {t.novaVigenciaFim && <span>Nova vigência: {format(parseISO(t.novaVigenciaFim), "dd/MM/yyyy")}</span>}
                       {t.percentualAcrescimo != null && <span>Acréscimo: {t.percentualAcrescimo}%</span>}
                     </div>
@@ -148,7 +161,7 @@ export function Renovacoes() {
 
       {isEmitirOpen && (
         <EmitirTermoModal
-          contratos={contratos}
+          contratos={contratosEmitiveis}
           onCancel={() => setIsEmitirOpen(false)}
           onSalvar={async (payload: CriarTermoPayload) => {
             try {
@@ -227,7 +240,7 @@ function EmitirTermoModal({
       <div className="w-full max-w-lg bg-white flex flex-col shadow-2xl animate-in slide-in-from-right duration-300">
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
           <div>
-            <h3 className="text-lg font-bold text-slate-900">Emitir Termo de Renovação</h3>
+            <h3 className="text-lg font-bold text-slate-900">Solicitar Termo de Renovação</h3>
             <p className="text-xs text-slate-500 mt-1">O termo será encaminhado à Secretaria de Licitações.</p>
           </div>
           <button onClick={onCancel} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100">
@@ -255,6 +268,9 @@ function EmitirTermoModal({
                 </option>
               ))}
             </select>
+            {contratos.length === 0 && (
+              <p className="text-xs text-amber-600 mt-1">Seu setor não é beneficiário de nenhum contrato ativo.</p>
+            )}
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Tipo de Renovação <span className="text-red-500">*</span></label>
@@ -314,7 +330,7 @@ function EmitirTermoModal({
             className="flex items-center gap-2 px-5 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-40 rounded-xl"
           >
             {salvando && <Loader2 className="w-4 h-4 animate-spin" />}
-            Emitir Termo
+            Solicitar Termo
           </button>
         </div>
       </div>

@@ -4,25 +4,33 @@ import {
   AtualizarTermoRenovacaoInput,
   CreateTermoRenovacaoInput,
 } from "../../common/schemas";
-import { NotFoundError, ValidationError } from "../../common/errors";
+import { ForbiddenError, NotFoundError, ValidationError } from "../../common/errors";
 
 export interface UsuarioTermo {
   id: number;
+  idSetor?: number;
+  isAdmin?: boolean;
 }
 
 export class TermoRenovacaoService {
   constructor(private repository: TermoRenovacaoRepository) {}
 
   async emitir(user: UsuarioTermo, input: CreateTermoRenovacaoInput) {
-    const contratoExiste = await this.repository.contratoExiste(input.idContrato);
+    const contrato = await this.repository.findContratoComSetores(input.idContrato);
 
-    if (!contratoExiste) {
+    if (!contrato) {
       throw new NotFoundError("Contrato");
+    }
+
+    const eBeneficiaria = contrato.setores.some((s) => s.idSetor === user.idSetor);
+    if (!user.isAdmin && !eBeneficiaria) {
+      throw new ForbiddenError("Seu setor não é beneficiário deste contrato");
     }
 
     return this.repository.create({
       idContrato: input.idContrato,
       idUsuarioEmissor: user.id,
+      idSetorSolicitante: user.idSetor ?? null,
       tipo: input.tipo,
       justificativa: input.justificativa,
       novaVigenciaFim: input.novaVigenciaFim,

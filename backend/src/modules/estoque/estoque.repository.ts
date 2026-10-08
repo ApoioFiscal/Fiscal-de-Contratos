@@ -128,10 +128,14 @@ export class EstoqueRepository {
         });
       }
 
-      if (pedido.status === StatusPedido.PENDENTE || pedido.status === StatusPedido.EM_COMPRA) {
+      if (
+        pedido.status === StatusPedido.PENDENTE ||
+        pedido.status === StatusPedido.CONFIRMADO ||
+        pedido.status === StatusPedido.EFETUADO
+      ) {
         await tx.pedido.update({
           where: { id: pedido.id },
-          data: { status: StatusPedido.ENTREGUE },
+          data: { status: StatusPedido.EFETUADO },
         });
       }
 
@@ -170,20 +174,6 @@ export class EstoqueRepository {
           itemLicitado: { select: { id: true, descricao: true, unidade: true } },
         },
       });
-
-      if (input.idPedido) {
-        const pedido = await tx.pedido.findUnique({
-          where: { id: input.idPedido },
-          select: { status: true },
-        });
-
-        if (pedido && pedido.status === StatusPedido.ENTREGUE) {
-          await tx.pedido.update({
-            where: { id: input.idPedido },
-            data: { status: StatusPedido.CONCLUIDO },
-          });
-        }
-      }
 
       return movimentacao;
     });

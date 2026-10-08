@@ -7,12 +7,15 @@ export type StatusContrato =
 
 export type StatusPedido =
   | "PENDENTE"
-  | "EM_COMPRA"
+  | "CONFIRMADO"
+  | "EFETUADO"
   | "ENTREGUE"
+  | "CONFERENCIA"
   | "CONCLUIDO"
-  | "RECUSADO"
   | "DEVOLVIDO"
   | "CANCELADO";
+
+export type TipoHistoricoPedido = "CRIACAO" | "STATUS" | "AVISO";
 
 export type TipoRenovacao = "VIGENCIA" | "QUANTITATIVO" | "FINANCEIRO";
 
@@ -86,6 +89,17 @@ export interface NotaFiscalResumo {
   dataEntrada: string;
 }
 
+export interface PedidoHistorico {
+  id: number;
+  idPedido: number;
+  tipo: TipoHistoricoPedido;
+  status: StatusPedido | null;
+  mensagem: string | null;
+  idUsuario: number;
+  data: string;
+  usuario?: { id: number; nome: string };
+}
+
 export interface Pedido {
   id: number;
   numeroPedido: string;
@@ -97,10 +111,11 @@ export interface Pedido {
   observacao: string | null;
   idContrato: number;
   itens: PedidoItem[];
-  contrato?: Pick<Licitacao, "id" | "numero" | "numeroProcesso" | "fornecedor" | "cnpjFornecedor">;
+  contrato?: Pick<Licitacao, "id" | "numero" | "numeroProcesso" | "objeto" | "fornecedor" | "cnpjFornecedor">;
   setor?: Setor;
   usuario?: { id: number; nome: string };
   notasFiscais?: NotaFiscalResumo[];
+  historico?: PedidoHistorico[];
 }
 
 export interface NotaFiscalItem {
@@ -180,6 +195,7 @@ export interface TermoRenovacao {
   contrato?: Pick<Licitacao, "id" | "numero" | "fornecedor" | "dataVigenciaFim" | "status">;
   usuarioEmissor?: { id: number; nome: string };
   usuarioLicitacao?: { id: number; nome: string };
+  setorSolicitante?: Setor;
 }
 
 export interface ItemSaldo {
@@ -195,10 +211,11 @@ export interface ItemSaldo {
 
 export const STATUS_PEDIDO_LABEL: Record<StatusPedido, string> = {
   PENDENTE: "Pendente",
-  EM_COMPRA: "Em Compra",
+  CONFIRMADO: "Em Compra",
+  EFETUADO: "Efetuado",
   ENTREGUE: "Entregue",
+  CONFERENCIA: "Conferência",
   CONCLUIDO: "Concluído",
-  RECUSADO: "Recusado",
   DEVOLVIDO: "Devolvido",
   CANCELADO: "Cancelado",
 };

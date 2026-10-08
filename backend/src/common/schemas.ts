@@ -102,7 +102,7 @@ export type PedidoItemInput = z.infer<typeof PedidoItemSchema>;
 
 export const CreatePedidoSchema = z.object({
   idContrato: z.number().int().positive("Contrato inválido"),
-  dataPrevistaEntrega: z.coerce.date().optional(),
+  dataPrevistaEntrega: z.coerce.date("Informe o prazo de entrega"),
   observacao: z.string().max(500).trim().optional(),
   itens: z.array(PedidoItemSchema).min(1, "Adicione ao menos um item ao pedido"),
 });
@@ -114,10 +114,17 @@ const STATUS_PEDIDO_VALUES = Object.values(StatusPedido) as [StatusPedido, ...St
 export const AtualizarStatusPedidoSchema = z.object({
   status: z.enum(STATUS_PEDIDO_VALUES),
   numeroOrdem: z.string().trim().optional(),
-  dataPrevistaEntrega: z.coerce.date().optional(),
+  aviso: z.string().max(1000).trim().optional(),
 });
 
 export type AtualizarStatusPedidoInput = z.infer<typeof AtualizarStatusPedidoSchema>;
+
+// Aviso do fiscal à secretaria solicitante (problema na entrega, divergência etc.)
+export const CreateAvisoPedidoSchema = z.object({
+  mensagem: z.string().min(3, "Descreva o aviso").max(1000, "Máximo de 1000 caracteres").trim(),
+});
+
+export type CreateAvisoPedidoInput = z.infer<typeof CreateAvisoPedidoSchema>;
 
 // ---- ESTOQUE (notas / baixas) ----
 

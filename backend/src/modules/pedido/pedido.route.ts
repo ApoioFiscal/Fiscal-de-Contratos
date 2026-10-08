@@ -4,7 +4,12 @@ import { PedidoService } from "./pedido.service";
 import { PedidoRepository } from "./pedido.repository";
 import { asyncHandler, autenticationMiddleware, validateBody, validateParams } from "../../common/middleware";
 import { requerPerfil } from "../../common/perfil";
-import { AtualizarStatusPedidoSchema, CreatePedidoSchema, IdParamSchema } from "../../common/schemas";
+import {
+  AtualizarStatusPedidoSchema,
+  CreateAvisoPedidoSchema,
+  CreatePedidoSchema,
+  IdParamSchema,
+} from "../../common/schemas";
 
 const repository = new PedidoRepository();
 const service = new PedidoService(repository);
@@ -51,4 +56,22 @@ pedidoRouter.patch(
   validateParams(IdParamSchema),
   validateBody(AtualizarStatusPedidoSchema),
   asyncHandler((req, res) => controller.atualizarStatus(req, res))
+);
+
+// Aviso do fiscal à secretaria solicitante (problema/divergência registrado na timeline)
+pedidoRouter.post(
+  "/:id/avisos",
+  autenticationMiddleware,
+  requerPerfil("contratos", "fiscal"),
+  validateParams(IdParamSchema),
+  validateBody(CreateAvisoPedidoSchema),
+  asyncHandler((req, res) => controller.registrarAviso(req, res))
+);
+
+// Termo de Recebimento de Produtos (DOCX gerado sob demanda)
+pedidoRouter.get(
+  "/:id/termo",
+  autenticationMiddleware,
+  validateParams(IdParamSchema),
+  asyncHandler((req, res) => controller.downloadTermoRecebimento(req, res))
 );

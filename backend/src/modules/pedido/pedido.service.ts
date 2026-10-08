@@ -2,6 +2,7 @@ import { StatusPedido } from "@prisma/client";
 import { PedidoRepository } from "./pedido.repository";
 import { CreatePedidoInput, AtualizarStatusPedidoInput } from "../../common/schemas";
 import { ForbiddenError, NotFoundError, ValidationError } from "../../common/errors";
+import { GeradorTermoRecebimentoDocx } from "./geradorTermoRecebimento";
 
 interface UsuarioAutenticado {
   id: number;
@@ -9,8 +10,25 @@ interface UsuarioAutenticado {
   isAdmin?: boolean;
 }
 
+// Transições de status permitidas no ciclo do pedido.
+// EFETUADO é alcançado pelo registro de nota fiscal (módulo de estoque),
+// não pela troca manual de status.
+const TRANSICOES: Record<StatusPedido, StatusPedido[]> = {
+  [StatusPedido.PENDENTE]: [StatusPedido.CONFIRMADO, StatusPedido.CANCELADO],
+  [StatusPedido.CONFIRMADO]: [StatusPedido.CANCELADO],
+  [StatusPedido.EFETUADO]: [StatusPedido.ENTREGUE, StatusPedido.DEVOLVIDO],
+  [StatusPedido.ENTREGUE]: [StatusPedido.CONFERENCIA, StatusPedido.DEVOLVIDO],
+  [StatusPedido.CONFERENCIA]: [StatusPedido.CONCLUIDO, StatusPedido.DEVOLVIDO],
+  [StatusPedido.CONCLUIDO]: [],
+  [StatusPedido.DEVOLVIDO]: [],
+  [StatusPedido.CANCELADO]: [],
+};
+
 export class PedidoService {
-  constructor(private repository: PedidoRepository) {}
+  constructor(
+    private repository: PedidoRepository,
+    private geradorTermo = new GeradorTermoRecebimentoDocx()
+  ) {}
 
   private gerarNumeroPedido(quantidade: number): string {
     const proximo = quantidade + 1;
@@ -103,16 +121,57 @@ export class PedidoService {
     return pedido;
   }
 
-  async atualizarStatus(id: number, input: AtualizarStatusPedidoInput) {
+  async atualizarStatus(id: number, user: UsuarioAutenticado, input: AtualizarStatusPedidoInput) {
     const pedido = await this.repository.findById(id);
     if (!pedido) {
       throw new NotFoundError("Pedido");
     }
 
-    if (input.status === StatusPedido.EM_COMPRA && !input.numeroOrdem) {
+    if (input.status === pedido.status) {
+      throw new ValidationError(`O pedido já está ${input.status.toLowerCase()}`);
+    }
+
+    const permitidos = TRANSICOES[pedido.status] ?? [];
+    if (!permitidos.includes(input.status)) {
+      throw new ValidationError(
+        `Transição inválida de "${pedido.status}" para "${input.status}" no ciclo do pedido`
+      );
+    }
+
+    if (input.status === StatusPedido.CONFIRMADO && !input.numeroOrdem) {
       throw new ValidationError("Informe o número da ordem de compra");
     }
 
-    return this.repository.updateStatus(id, input.status, input);
+    return this.repository.updateStatus(id, input.status, input, user.id);
+  }
+
+  async registrarAviso(id: number, user: UsuarioAutenticado, mensagem: string) {
+    const pedido = await this.repository.findById(id);
+    if (!pedido) {
+      throw new NotFoundError("Pedido");
+    }
+
+    return this.repository.registrarAviso(id, user.id, mensagem);
+  }
+
+  async gerarTermoRecebimento(id: number, fiscalNome: string, fiscalCpf?: string) {
+    const pedido = await this.repository.findById(id);
+    if (!pedido) {
+      throw new NotFoundError("Pedido");
+    }
+
+    const buffer = await this.geradorTermo.gerar(
+      {
+        numeroPedido: pedido.numeroPedido,
+        contrato: { numero: pedido.contrato.numero },
+        setor: pedido.setor ? { nome: pedido.setor.nome } : null,
+        itens: pedido.itens,
+      },
+      fiscalNome,
+      fiscalCpf
+    );
+
+    const filename = `TERMO-RECEBIMENTO-${pedido.numeroPedido.replace(/[^a-zA-Z0-9-_]/g, "_")}.docx`;
+    return { buffer, filename };
   }
 }

@@ -14,22 +14,26 @@ const termoInclude = {
   },
   usuarioEmissor: { select: { id: true, nome: true } },
   usuarioLicitacao: { select: { id: true, nome: true } },
+  setorSolicitante: { select: { id: true, nome: true, sigla: true } },
 } as const;
 
 export class TermoRenovacaoRepository {
-  async contratoExiste(id: number): Promise<boolean> {
-    const contrato = await prisma.licitacaoContrato.findUnique({
+  async findContratoComSetores(id: number) {
+    return prisma.licitacaoContrato.findUnique({
       where: { id },
-      select: { id: true },
+      select: {
+        id: true,
+        setores: { select: { idSetor: true } },
+      },
     });
-    return Boolean(contrato);
   }
 
-  async create(data: CreateTermoRenovacaoInput & { idUsuarioEmissor: number }) {
+  async create(data: CreateTermoRenovacaoInput & { idUsuarioEmissor: number; idSetorSolicitante: number | null }) {
     return prisma.termoRenovacao.create({
       data: {
         idContrato: data.idContrato,
         idUsuarioEmissor: data.idUsuarioEmissor,
+        idSetorSolicitante: data.idSetorSolicitante,
         tipo: data.tipo,
         justificativa: data.justificativa,
         novaVigenciaFim: data.novaVigenciaFim ?? null,

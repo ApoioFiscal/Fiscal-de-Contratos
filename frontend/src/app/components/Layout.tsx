@@ -1,5 +1,5 @@
 import { Outlet, NavLink, useNavigate, useLocation } from "react-router";
-import { LayoutDashboard, FileText, ShoppingCart, Package, Star, RefreshCcw, Users, LogOut, ArrowLeft } from "lucide-react";
+import { LayoutDashboard, FileText, ShoppingCart, Star, RefreshCcw, Users, LogOut, ArrowLeft } from "lucide-react";
 
 import { encerrarSessao, obterSessao } from "@/services/auth";
 import type { PerfilAcesso } from "@/types/auth";
@@ -14,6 +14,7 @@ const navItemsPorPerfil: Record<PerfilAcesso, NavItem[]> = {
   gabinete: [
     { to: "/", icon: LayoutDashboard, label: "Dashboard" },
     { to: "/pedidos", icon: ShoppingCart, label: "Pedidos e Ordens" },
+    { to: "/renovacoes", icon: RefreshCcw, label: "Renovacoes" },
     { to: "/secretarias", icon: Users, label: "Gestao de Secretarias" },
   ],
   licitacoes: [
@@ -26,21 +27,18 @@ const navItemsPorPerfil: Record<PerfilAcesso, NavItem[]> = {
     { to: "/", icon: LayoutDashboard, label: "Dashboard" },
     { to: "/licitacoes", icon: FileText, label: "Licitacoes & Contratos" },
     { to: "/pedidos", icon: ShoppingCart, label: "Pedidos e Ordens" },
-    { to: "/estoque", icon: Package, label: "Estoque" },
     { to: "/avaliacoes", icon: Star, label: "Avaliacoes" },
-    { to: "/renovacoes", icon: RefreshCcw, label: "Renovacoes" },
   ],
   secretaria: [
     { to: "/", icon: LayoutDashboard, label: "Dashboard" },
     { to: "/pedidos", icon: ShoppingCart, label: "Pedidos e Ordens" },
+    { to: "/renovacoes", icon: RefreshCcw, label: "Renovacoes" },
   ],
   fiscal: [
     { to: "/", icon: LayoutDashboard, label: "Dashboard" },
     { to: "/licitacoes", icon: FileText, label: "Licitacoes & Contratos" },
     { to: "/pedidos", icon: ShoppingCart, label: "Pedidos e Ordens" },
-    { to: "/estoque", icon: Package, label: "Estoque" },
     { to: "/avaliacoes", icon: Star, label: "Avaliacoes" },
-    { to: "/renovacoes", icon: RefreshCcw, label: "Renovacoes" },
   ],
 };
 

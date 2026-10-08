@@ -1,6 +1,7 @@
-import { StatusPedido } from "@prisma/client";
+import { Prisma, StatusPedido, TipoHistoricoPedido, TipoMovimentacao } from "@prisma/client";
 import { prisma } from "../../prisma/client";
 import { CreatePedidoInput, AtualizarStatusPedidoInput } from "../../common/schemas";
+import { NotFoundError } from "../../common/errors";
 
 export interface PedidoItemEntrada {
   idItemLicitado: number;
@@ -33,6 +34,7 @@ const pedidoInclude = {
       id: true,
       numero: true,
       numeroProcesso: true,
+      objeto: true,
       fornecedor: true,
       cnpjFornecedor: true,
     },
@@ -46,6 +48,10 @@ const pedidoInclude = {
   notasFiscais: {
     select: { id: true, numeroNota: true, dataEmissao: true, dataEntrada: true },
     orderBy: { dataEntrada: "desc" as const },
+  },
+  historico: {
+    include: { usuario: { select: { id: true, nome: true } } },
+    orderBy: { data: "asc" as const },
   },
 };
 
@@ -74,7 +80,15 @@ export class PedidoRepository {
       where: {
         idItemLicitado,
         pedido: {
-          status: { in: [StatusPedido.EM_COMPRA, StatusPedido.ENTREGUE] },
+          status: {
+            in: [
+              StatusPedido.PENDENTE,
+              StatusPedido.CONFIRMADO,
+              StatusPedido.EFETUADO,
+              StatusPedido.ENTREGUE,
+              StatusPedido.CONFERENCIA,
+            ],
+          },
         },
       },
       select: { quantidade: true },
@@ -96,7 +110,7 @@ export class PedidoRepository {
         idUsuarioCriador: data.idUsuarioCriador,
         idSetorCriador: data.idSetorCriador,
         idContrato: data.idContrato,
-        dataPrevistaEntrega: data.dataPrevistaEntrega ?? null,
+        dataPrevistaEntrega: data.dataPrevistaEntrega,
         observacao: data.observacao ?? null,
         itens: {
           create: itens.map((item) => ({
@@ -105,6 +119,13 @@ export class PedidoRepository {
             valorUnitario: item.valorUnitario,
             valorTotal: item.valorUnitario * item.quantidade,
           })),
+        },
+        historico: {
+          create: {
+            tipo: TipoHistoricoPedido.CRIACAO,
+            idUsuario: data.idUsuarioCriador,
+            mensagem: `Pedido criado pela ${data.idSetorCriador ? "secretaria solicitante" : "secretaria"}`,
+          },
         },
       },
       include: pedidoInclude,
@@ -133,23 +154,85 @@ export class PedidoRepository {
     });
   }
 
-  async updateStatus(id: number, status: StatusPedido, input: AtualizarStatusPedidoInput) {
-    const data: Record<string, unknown> = { status };
+  async updateStatus(id: number, status: StatusPedido, input: AtualizarStatusPedidoInput, idUsuario: number) {
+    return prisma.$transaction(async (tx) => {
+      const pedido = await tx.pedido.findUnique({
+        where: { id },
+        include: {
+          itens: { select: { idItemLicitado: true, quantidade: true } },
+        },
+      });
 
-    if (status === StatusPedido.EM_COMPRA) {
-      data.numeroOrdem = input.numeroOrdem ?? null;
-      data.dataOrdem = new Date();
-      data.dataPrevistaEntrega = input.dataPrevistaEntrega ?? undefined;
-    }
+      if (!pedido) {
+        throw new NotFoundError("Pedido");
+      }
 
-    if ("dataPrevistaEntrega" in data && data.dataPrevistaEntrega === undefined) {
-      delete data.dataPrevistaEntrega;
-    }
+      const data: Prisma.PedidoUncheckedUpdateInput = { status };
 
-    return prisma.pedido.update({
-      where: { id },
-      data,
-      include: pedidoInclude,
+      if (status === StatusPedido.CONFIRMADO) {
+        data.numeroOrdem = input.numeroOrdem ?? null;
+        data.dataOrdem = new Date();
+      }
+
+      const atualizado = await tx.pedido.update({ where: { id }, data });
+
+      await tx.pedidoHistorico.create({
+        data: {
+          idPedido: id,
+          tipo: TipoHistoricoPedido.STATUS,
+          status,
+          idUsuario,
+          mensagem:
+            status === StatusPedido.CONFIRMADO
+              ? `Compra registrada (ordem ${input.numeroOrdem ?? "—"})`
+              : undefined,
+        },
+      });
+
+      if (input.aviso) {
+        await tx.pedidoHistorico.create({
+          data: {
+            idPedido: id,
+            tipo: TipoHistoricoPedido.AVISO,
+            idUsuario,
+            mensagem: input.aviso,
+          },
+        });
+      }
+
+      if (status === StatusPedido.CONCLUIDO) {
+        for (const item of pedido.itens) {
+          await tx.itemLicitado.update({
+            where: { id: item.idItemLicitado },
+            data: { consumido: { increment: item.quantidade } },
+          });
+
+          await tx.movimentacaoEstoque.create({
+            data: {
+              tipo: TipoMovimentacao.BAIXA,
+              idItemLicitado: item.idItemLicitado,
+              idPedido: id,
+              quantidade: item.quantidade,
+              observacao: "Baixa automática na conclusão do pedido",
+            },
+          });
+        }
+      }
+
+      return atualizado;
+    }).then(() => this.findById(id));
+  }
+
+  async registrarAviso(id: number, idUsuario: number, mensagem: string) {
+    await prisma.pedidoHistorico.create({
+      data: {
+        idPedido: id,
+        tipo: TipoHistoricoPedido.AVISO,
+        idUsuario,
+        mensagem,
+      },
     });
+
+    return this.findById(id);
   }
 }

@@ -43,6 +43,9 @@ export function Dashboard() {
   const podeOperar =
     sessao?.perfil === "contratos" || sessao?.perfil === "fiscal";
 
+  const podeVerTermos =
+    sessao?.perfil === "licitacoes" || sessao?.perfil === "gabinete";
+
   useEffect(() => {
     listarLicitacoes()
       .then(setLicitacoes)
@@ -50,10 +53,12 @@ export function Dashboard() {
     (podeOperar ? listarFilaPedidos() : listarMeusPedidos())
       .then(setPedidos)
       .catch(() => setPedidos([]));
-    listarTermos()
-      .then(setTermos)
-      .catch(() => setTermos([]));
-  }, [podeOperar]);
+    if (podeVerTermos) {
+      listarTermos()
+        .then(setTermos)
+        .catch(() => setTermos([]));
+    }
+  }, [podeOperar, podeVerTermos]);
 
   const today = new Date();
   const expiringBiddings = licitacoes.filter((b) => {
@@ -71,9 +76,16 @@ export function Dashboard() {
 
   const stats = [
     { label: "Licitações Ativas", value: licitacoes.filter((l) => l.status === "ATIVA").length, icon: PackageSearch, color: "text-blue-600" },
-    { label: "Pedidos em Andamento", value: pedidos.filter((p) => ["PENDENTE", "EM_COMPRA", "ENTREGUE"].includes(p.status)).length, icon: TrendingUp, color: "text-emerald-600" },
+    {
+      label: "Pedidos em Andamento",
+      value: pedidos.filter((p) => ["PENDENTE", "CONFIRMADO", "EFETUADO", "ENTREGUE", "CONFERENCIA"].includes(p.status)).length,
+      icon: TrendingUp,
+      color: "text-emerald-600",
+    },
     { label: "Contratos a Vencer (60d)", value: expiringBiddings.length, icon: AlertCircle, color: "text-amber-600" },
-    { label: "Termos de Renovação Pendentes", value: termosPendentes.length, icon: FileClock, color: "text-rose-600" },
+    ...(podeVerTermos
+      ? [{ label: "Termos de Renovação Pendentes", value: termosPendentes.length, icon: FileClock, color: "text-rose-600" }]
+      : []),
   ];
 
   const chartData = licitacoes
@@ -163,19 +175,20 @@ export function Dashboard() {
               </div>
             ))}
 
-            {termosPendentes.map((t) => (
+            {podeVerTermos && termosPendentes.map((t) => (
               <div key={`t-${t.id}`} className="p-4 rounded-lg bg-blue-50 border border-blue-200 flex gap-3">
                 <FileClock className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
                 <div>
-                  <h4 className="text-sm font-semibold text-blue-900">Termo de Renovação #{t.id}</h4>
+                  <h4 className="text-sm font-semibold text-blue-900">Solicitação de Renovação #{t.id}</h4>
                   <p className="text-xs text-blue-700 mt-1">
-                    {t.contrato?.numero} aguarda análise em {t.status === "EM_ANALISE" ? "análise" : "inserção"} pela Licitações.
+                    {t.contrato?.numero} aguarda análise da Licitações — solicitado por{" "}
+                    {t.setorSolicitante?.sigla || t.setorSolicitante?.nome || "secretaria"}.
                   </p>
                 </div>
               </div>
             ))}
 
-            {expiringBiddings.length === 0 && lowStockItems.length === 0 && termosPendentes.length === 0 && (
+            {expiringBiddings.length === 0 && lowStockItems.length === 0 && (!podeVerTermos || termosPendentes.length === 0) && (
               <div className="text-center text-slate-400 py-8">Nenhum alerta no momento.</div>
             )}
           </div>
