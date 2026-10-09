@@ -117,6 +117,8 @@ export const AtualizarStatusPedidoSchema = z.object({
   aviso: z.string().max(1000).trim().optional(),
   // CPF do fiscal — obrigatório (validado no service) quando status = CONCLUIDO
   cpf: z.string().trim().optional(),
+  // Observação registrada pelo fiscal na etapa de entrega (detalha o que aconteceu)
+  observacao: z.string().max(2000).trim().optional(),
 });
 
 export type AtualizarStatusPedidoInput = z.infer<typeof AtualizarStatusPedidoSchema>;

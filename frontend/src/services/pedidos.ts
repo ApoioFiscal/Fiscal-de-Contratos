@@ -12,6 +12,7 @@ export interface AtualizarStatusPedidoPayload {
   status: StatusPedido;
   cpf?: string;
   aviso?: string;
+  observacao?: string;
 }
 
 const API_BASE_URL = import.meta.env.VITE_API_URL ?? "/api";

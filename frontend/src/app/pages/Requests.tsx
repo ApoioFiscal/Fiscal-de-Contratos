@@ -23,6 +23,15 @@ import { STATUS_PEDIDO_LABEL } from "@/types/domain";
 const fmt = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 const PARSING_BASE_URL = import.meta.env.VITE_PARSING_URL ?? "http://localhost:3000";
 
+// Formata um CPF enquanto o usuário digita: 000.000.000-00
+function mascaraCpf(valor: string): string {
+  const d = valor.replace(/\D/g, "").slice(0, 11);
+  if (d.length <= 3) return d;
+  if (d.length <= 6) return `${d.slice(0, 3)}.${d.slice(3)}`;
+  if (d.length <= 9) return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6)}`;
+  return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`;
+}
+
 type FiltroStatus = "TODOS" | StatusPedido;
 
 const ORDEM_STATUS: StatusPedido[] = [
@@ -86,10 +95,9 @@ export function Requests() {
   const [statusPedido, setStatusPedido] = useState<Pedido | null>(null);
   const [novoStatus, setNovoStatus] = useState<StatusPedido>("CONFIRMADO");
   const [cpfStatus, setCpfStatus] = useState("");
-  const [avisoStatus, setAvisoStatus] = useState("");
 
-  const [isNotaOpen, setIsNotaOpen] = useState(false);
-  const [notaPedido, setNotaPedido] = useState<Pedido | null>(null);
+  const [isEntregaOpen, setIsEntregaOpen] = useState(false);
+  const [entregaPedido, setEntregaPedido] = useState<Pedido | null>(null);
 
   const [isAvisoOpen, setIsAvisoOpen] = useState(false);
   const [avisoPedido, setAvisoPedido] = useState<Pedido | null>(null);
@@ -197,7 +205,6 @@ export function Requests() {
     setStatusPedido(pedido);
     setNovoStatus(status);
     setCpfStatus("");
-    setAvisoStatus("");
     setIsStatusOpen(true);
   };
 
@@ -208,8 +215,7 @@ export function Requests() {
     try {
       await atualizarStatusPedido(statusPedido.id, {
         status: novoStatus,
-        cpf: novoStatus === "CONCLUIDO" ? cpfStatus.trim() || undefined : undefined,
-        aviso: avisoStatus.trim() || undefined,
+        cpf: novoStatus === "CONCLUIDO" ? cpfStatus.trim() : undefined,
       });
       setIsStatusOpen(false);
       setStatusPedido(null);
@@ -221,9 +227,9 @@ export function Requests() {
     }
   };
 
-  const abrirNota = (pedido: Pedido) => {
-    setNotaPedido(pedido);
-    setIsNotaOpen(true);
+  const abrirEntrega = (pedido: Pedido) => {
+    setEntregaPedido(pedido);
+    setIsEntregaOpen(true);
   };
 
   const abrirAviso = (pedido: Pedido) => {
@@ -257,9 +263,9 @@ export function Requests() {
     }
   };
 
-  const acoesPorStatus = (pedido: Pedido): { kind: "status" | "nota" | "aviso" | "termo"; status?: StatusPedido; label: string; icon: typeof Clock; cor: string }[] => {
+  const acoesPorStatus = (pedido: Pedido): { kind: "status" | "entrega" | "aviso" | "termo"; status?: StatusPedido; label: string; icon: typeof Clock; cor: string }[] => {
     if (!podeOperar) return [];
-    const btn = (label: string, icon: typeof Clock, cor: string, kind: "status" | "nota" | "aviso" | "termo", status?: StatusPedido) => ({ kind, status, label, icon, cor });
+    const btn = (label: string, icon: typeof Clock, cor: string, kind: "status" | "entrega" | "aviso" | "termo", status?: StatusPedido) => ({ kind, status, label, icon, cor });
     switch (pedido.status) {
       case "PENDENTE":
         return [
@@ -268,11 +274,12 @@ export function Requests() {
         ];
       case "CONFIRMADO":
         return [
-          btn("Registrar NF (Efetuar)", ReceiptText, "bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border-emerald-200", "nota"),
+          btn("Compra Efetuada", ShoppingCart, "bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border-emerald-200", "status", "EFETUADO"),
         ];
       case "EFETUADO":
         return [
-          btn("Confirmar Entrega", Truck, "bg-cyan-50 text-cyan-700 hover:bg-cyan-100 border-cyan-200", "status", "ENTREGUE"),
+          btn("Confirmar Entrega", ClipboardCheck, "bg-cyan-50 text-cyan-700 hover:bg-cyan-100 border-cyan-200", "entrega"),
+          btn("Informar Divergência", MessageSquareWarning, "bg-rose-50 text-rose-700 hover:bg-rose-100 border-rose-200", "aviso"),
           btn("Devolver", RotateCcw, "bg-orange-50 text-orange-700 hover:bg-orange-100 border-orange-200", "status", "DEVOLVIDO"),
         ];
       case "ENTREGUE":
@@ -298,7 +305,7 @@ export function Requests() {
 
   const handleAcao = (pedido: Pedido, acao: (typeof acoesPorStatus)[0]) => {
     if (acao.kind === "status" && acao.status) abrirStatus(pedido, acao.status);
-    else if (acao.kind === "nota") abrirNota(pedido);
+    else if (acao.kind === "entrega") abrirEntrega(pedido);
     else if (acao.kind === "aviso") abrirAviso(pedido);
     else if (acao.kind === "termo") baixarTermo(pedido);
   };
@@ -430,16 +437,17 @@ export function Requests() {
               }
             }
             return (
-              <div key={pedido.id} className="hover:bg-slate-50 transition-colors">
+              <div
+                key={pedido.id}
+                onClick={() => setExpandedId(expandido ? null : pedido.id)}
+                className="hover:bg-slate-50 transition-colors cursor-pointer"
+              >
                 <div className="p-4 sm:px-6">
                   <div className="flex flex-wrap items-center gap-3">
-                    <button
-                      onClick={() => setExpandedId(expandido ? null : pedido.id)}
-                      className="flex items-center gap-2 text-sm font-medium text-blue-600 hover:underline"
-                    >
+                    <span className="flex items-center gap-2 text-sm font-medium text-blue-600">
                       <FileText className="w-4 h-4" />
                       {pedido.numeroPedido}
-                    </button>
+                    </span>
                     <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium ${statusChip[pedido.status]}`}>
                       <Icon className="w-3.5 h-3.5" /> {STATUS_PEDIDO_LABEL[pedido.status]}
                     </span>
@@ -454,9 +462,9 @@ export function Requests() {
                         </span>
                       )}
                       <span className="text-sm font-semibold text-slate-900">{fmt.format(total)}</span>
-                      <button onClick={() => setExpandedId(expandido ? null : pedido.id)} className="text-slate-400">
+                      <span className="text-slate-400 pointer-events-none" aria-hidden="true">
                         {expandido ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
-                      </button>
+                      </span>
                     </div>
                   </div>
 
@@ -468,7 +476,7 @@ export function Requests() {
                   )}
 
                   {podeOperar && (
-                    <div className="mt-3 flex flex-wrap gap-2">
+                    <div className="mt-3 flex flex-wrap gap-2" onClick={(e) => e.stopPropagation()}>
                       {acoesPorStatus(pedido).map((acao, i) => (
                         <button
                           key={i}
@@ -483,7 +491,7 @@ export function Requests() {
                   )}
 
                   {!podeOperar && pedido.status === "CONCLUIDO" && pedido.arquivoTermo && (
-                    <div className="mt-3">
+                    <div className="mt-3" onClick={(e) => e.stopPropagation()}>
                       <button
                         onClick={() => baixarTermo(pedido)}
                         className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors bg-slate-50 text-slate-700 hover:bg-slate-100 border-slate-300"
@@ -531,7 +539,7 @@ export function Requests() {
                             <div className="flex items-center gap-1.5">
                               <span className="font-medium text-slate-900 line-clamp-1">{pedido.observacao}</span>
                               <button
-                                onClick={() => setObsAberto(pedido.id)}
+                                onClick={(e) => { e.stopPropagation(); setObsAberto(pedido.id); }}
                                 aria-label="Ver observação completa"
                                 className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100"
                               >
@@ -679,7 +687,9 @@ export function Requests() {
               <h3 className="text-lg font-bold text-slate-900">
                 {novoStatus === "CONFIRMADO"
                   ? "Registrar Compra"
-                  : `Alterar para ${STATUS_PEDIDO_LABEL[novoStatus]}`} — {statusPedido.numeroPedido}
+                  : novoStatus === "EFETUADO"
+                    ? "Compra Efetuada"
+                    : `Alterar para ${STATUS_PEDIDO_LABEL[novoStatus]}`} — {statusPedido.numeroPedido}
               </h3>
               <button onClick={() => setIsStatusOpen(false)} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100">
                 <X className="w-5 h-5" />
@@ -693,22 +703,12 @@ export function Requests() {
                   </p>
                 </div>
               )}
-              {["ENTREGUE", "CONFERENCIA", "CONCLUIDO", "DEVOLVIDO"].includes(novoStatus) && (
+              {novoStatus === "EFETUADO" && (
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">
-                    Aviso ao secretário {novoStatus === "CONCLUIDO" ? "(opcional)" : "(opcional)"}
-                  </label>
-                  <textarea
-                    rows={3}
-                    value={avisoStatus}
-                    onChange={(e) => setAvisoStatus(e.target.value)}
-                    placeholder={
-                      novoStatus === "DEVOLVIDO"
-                        ? "Motivo da devolução... (recomendado)"
-                        : "Ex.: entrega parcial, atraso, divergência em item... (opcional)"
-                    }
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-                  />
+                  <p className="text-sm text-slate-600">
+                    O pedido passará para <strong>Compra Efetuada</strong> e a secretaria será informada. A{" "}
+                    <strong>nota fiscal</strong> será registrada quando o fiscal confirmar a entrega.
+                  </p>
                 </div>
               )}
               {(novoStatus === "DEVOLVIDO" || novoStatus === "CANCELADO") && (
@@ -725,8 +725,9 @@ export function Requests() {
                     </label>
                     <input
                       type="text"
+                      inputMode="numeric"
                       value={cpfStatus}
-                      onChange={(e) => setCpfStatus(e.target.value)}
+                      onChange={(e) => setCpfStatus(mascaraCpf(e.target.value))}
                       placeholder="000.000.000-00"
                       className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
@@ -737,7 +738,7 @@ export function Requests() {
                   </p>
                 </>
               )}
-              {!["CONFIRMADO", "DEVOLVIDO", "CANCELADO", "CONCLUIDO"].includes(novoStatus) && (
+              {!["CONFIRMADO", "EFETUADO", "DEVOLVIDO", "CANCELADO", "CONCLUIDO"].includes(novoStatus) && (
                 <p className="text-sm text-slate-600">
                   O pedido passará para <strong>{STATUS_PEDIDO_LABEL[novoStatus]}</strong>.
                 </p>
@@ -763,18 +764,29 @@ export function Requests() {
         </div>
       )}
 
-      {isNotaOpen && notaPedido && (
-        <RegistrarNotaModal
-          pedido={notaPedido}
-          onCancel={() => setIsNotaOpen(false)}
+      {isEntregaOpen && entregaPedido && (
+        <ConfirmarEntregaModal
+          pedido={entregaPedido}
+          carregando={criando}
+          onCancel={() => setIsEntregaOpen(false)}
           onSalvar={async (payload) => {
             try {
-              await registrarEntradaNota(payload);
-              setIsNotaOpen(false);
-              setNotaPedido(null);
+              await registrarEntradaNota({
+                idPedido: payload.idPedido,
+                numeroNota: payload.numeroNota,
+                dataEmissao: payload.dataEmissao,
+                itens: payload.itens,
+              });
+              await atualizarStatusPedido(payload.idPedido, {
+                status: "CONCLUIDO",
+                cpf: payload.cpf,
+                observacao: payload.observacao,
+              });
+              setIsEntregaOpen(false);
+              setEntregaPedido(null);
               reload();
             } catch (err) {
-              setError(err instanceof Error ? err.message : "Erro ao registrar nota.");
+              setError(err instanceof Error ? err.message : "Erro ao confirmar a entrega.");
             }
           }}
         />
@@ -851,7 +863,6 @@ function NovoPedidoModal({
 }) {
   const [idContrato, setIdContrato] = useState<number | "">("");
   const [itens, setItens] = useState<{ idItemLicitado: number; quantidade: string }[]>([]);
-  const [observacao, setObservacao] = useState("");
   const [dataPrevista, setDataPrevista] = useState("");
 
   const contrato = contratos.find((c) => c.id === idContrato);
@@ -876,7 +887,6 @@ function NovoPedidoModal({
     onSalvar({
       idContrato: Number(idContrato),
       dataPrevistaEntrega: dataPrevista,
-      observacao: observacao.trim() || undefined,
       itens: selecionados.map((s) => ({ idItemLicitado: s.item!.id, quantidade: s.quantidade })),
     });
   };
@@ -957,15 +967,6 @@ function NovoPedidoModal({
             </div>
           )}
 
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Observação</label>
-            <input
-              type="text"
-              value={observacao}
-              onChange={(e) => setObservacao(e.target.value)}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
         </div>
 
         <div className="px-8 py-4 border-t border-slate-200 flex justify-end gap-3">
@@ -986,26 +987,42 @@ function NovoPedidoModal({
   );
 }
 
-function RegistrarNotaModal({
+function ConfirmarEntregaModal({
   pedido,
+  carregando,
   onCancel,
   onSalvar,
 }: {
   pedido: Pedido;
+  carregando: boolean;
   onCancel: () => void;
-  onSalvar: (payload: { idPedido: number; numeroNota: string; dataEmissao: string; itens: { idItemLicitado: number; quantidade: number }[] }) => Promise<void>;
+  onSalvar: (payload: {
+    idPedido: number;
+    numeroNota: string;
+    dataEmissao: string;
+    cpf: string;
+    observacao?: string;
+    itens: { idItemLicitado: number; quantidade: number }[];
+  }) => Promise<void>;
 }) {
   const [numeroNota, setNumeroNota] = useState("");
   const [dataEmissao, setDataEmissao] = useState("");
   const [fornecedorExtraido, setFornecedorExtraido] = useState("");
+  const [quantidades, setQuantidades] = useState<Record<number, string>>(() =>
+    Object.fromEntries(pedido.itens.map((i) => [i.idItemLicitado, String(i.quantidade)]))
+  );
+  const [observacao, setObservacao] = useState("");
+  const [cpf, setCpf] = useState("");
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
 
   const selecionados = pedido.itens
-    .map((item) => ({ idItemLicitado: item.idItemLicitado, quantidade: item.quantidade }));
+    .map((item) => ({ idItemLicitado: item.idItemLicitado, quantidade: Number(quantidades[item.idItemLicitado]) || 0 }))
+    .filter((s) => s.quantidade > 0);
 
-  const valido = numeroNota.trim() && dataEmissao && selecionados.length > 0;
+  const cpfValido = cpf.replace(/\D/g, "").length === 11;
+  const valido = Boolean(numeroNota.trim()) && Boolean(dataEmissao) && selecionados.length > 0 && cpfValido;
 
   const handlePdfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -1061,6 +1078,8 @@ function RegistrarNotaModal({
         idPedido: pedido.id,
         numeroNota: numeroNota.trim(),
         dataEmissao,
+        cpf: cpf.replace(/\D/g, ""),
+        observacao: observacao.trim() || undefined,
         itens: selecionados,
       });
     } finally {
@@ -1073,8 +1092,10 @@ function RegistrarNotaModal({
       <div className="w-full max-w-xl bg-white flex flex-col shadow-2xl animate-in slide-in-from-right duration-300">
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
           <div>
-            <h3 className="text-lg font-bold text-slate-900">Registrar Nota Fiscal</h3>
-            <p className="text-xs text-slate-500 mt-1">{pedido.numeroPedido} — efetua a compra do pedido.</p>
+            <h3 className="text-lg font-bold text-slate-900">Confirmar Entrega</h3>
+            <p className="text-xs text-slate-500 mt-1">
+              {pedido.numeroPedido} — registra a NF, recebe os itens e gera o termo de recebimento.
+            </p>
           </div>
           <button onClick={onCancel} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100">
             <X className="w-5 h-5" />
@@ -1129,20 +1150,58 @@ function RegistrarNotaModal({
           <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
             <div className="px-4 py-3 bg-slate-50 border-b border-slate-200 flex items-center gap-2">
               <ReceiptText className="w-4 h-4 text-slate-400" />
-              <p className="text-sm font-semibold text-slate-700">Itens a Receber</p>
+              <p className="text-sm font-semibold text-slate-700">Quantidade Recebida (comparar com o pedido)</p>
             </div>
             <div className="divide-y divide-slate-100">
               {pedido.itens.map((item) => (
                 <div key={item.id} className="px-4 py-3 flex items-center gap-3">
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-slate-900">{item.itemLicitado?.descricao}</p>
+                    <p className="text-xs text-slate-500">Qtd pedida: {item.quantidade} {item.itemLicitado?.unidade}</p>
                   </div>
-                  <span className="px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-sm font-medium text-slate-900">
-                    {item.quantidade} {item.itemLicitado?.unidade}
-                  </span>
+                  <input
+                    type="number"
+                    min="0"
+                    max={item.quantidade}
+                    inputMode="decimal"
+                    value={quantidades[item.idItemLicitado] ?? ""}
+                    onChange={(e) =>
+                      setQuantidades((q) => ({ ...q, [item.idItemLicitado]: e.target.value }))
+                    }
+                    aria-label={`Quantidade recebida de ${item.itemLicitado?.descricao || item.idItemLicitado}`}
+                    className="w-24 px-3 py-2 border border-slate-300 rounded-lg text-sm text-right focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <span className="w-10 text-sm text-slate-500">{item.itemLicitado?.unidade}</span>
                 </div>
               ))}
             </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              CPF do fiscal <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              inputMode="numeric"
+              value={cpf}
+              onChange={(e) => setCpf(mascaraCpf(e.target.value))}
+              placeholder="000.000.000-00"
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              Observações da entrega <span className="text-slate-400">(detalhe o que aconteceu)</span>
+            </label>
+            <textarea
+              rows={3}
+              value={observacao}
+              onChange={(e) => setObservacao(e.target.value)}
+              placeholder="Ex.: conferido com a nota, itens e quantidades de acordo com o pedido..."
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+            />
           </div>
         </div>
         <div className="px-6 py-4 border-t border-slate-200 flex justify-end gap-3">
@@ -1151,11 +1210,11 @@ function RegistrarNotaModal({
           </button>
           <button
             onClick={salvar}
-            disabled={!valido || salvando}
+            disabled={!valido || salvando || carregando}
             className="flex items-center gap-2 px-5 py-2 text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 rounded-xl"
           >
             {salvando && <Loader2 className="w-4 h-4 animate-spin" />}
-            Registrar Entrada
+            Confirmar Entrega e Concluir
           </button>
         </div>
       </div>

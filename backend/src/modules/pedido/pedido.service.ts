@@ -17,12 +17,12 @@ interface UsuarioAutenticado {
 }
 
 // Transições de status permitidas no ciclo do pedido.
-// EFETUADO é alcançado pelo registro de nota fiscal (módulo de estoque),
-// não pela troca manual de status.
+// O registro da nota fiscal acontece na etapa de "Confirmar Entrega" (EFETUADO -> CONCLUIDO),
+// que também gera o termo. ENTREGUE/CONFERENCIA permanecem apenas para pedidos legados.
 const TRANSICOES: Record<StatusPedido, StatusPedido[]> = {
   [StatusPedido.PENDENTE]: [StatusPedido.CONFIRMADO, StatusPedido.CANCELADO],
-  [StatusPedido.CONFIRMADO]: [StatusPedido.CANCELADO],
-  [StatusPedido.EFETUADO]: [StatusPedido.ENTREGUE, StatusPedido.DEVOLVIDO],
+  [StatusPedido.CONFIRMADO]: [StatusPedido.EFETUADO, StatusPedido.CANCELADO],
+  [StatusPedido.EFETUADO]: [StatusPedido.ENTREGUE, StatusPedido.CONCLUIDO, StatusPedido.DEVOLVIDO],
   [StatusPedido.ENTREGUE]: [StatusPedido.CONFERENCIA, StatusPedido.DEVOLVIDO],
   [StatusPedido.CONFERENCIA]: [StatusPedido.CONCLUIDO, StatusPedido.DEVOLVIDO],
   [StatusPedido.CONCLUIDO]: [],

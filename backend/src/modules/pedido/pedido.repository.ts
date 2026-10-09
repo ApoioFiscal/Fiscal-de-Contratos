@@ -191,6 +191,10 @@ export class PedidoRepository {
         data.dataGeracaoTermo = new Date();
       }
 
+      if (input.observacao) {
+        data.observacao = input.observacao;
+      }
+
       const atualizado = await tx.pedido.update({ where: { id }, data });
 
       await tx.pedidoHistorico.create({

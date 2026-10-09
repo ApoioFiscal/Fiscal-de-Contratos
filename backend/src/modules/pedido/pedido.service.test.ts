@@ -16,7 +16,7 @@ import { ValidationError, NotFoundError } from "../../common/errors";
 interface RegistroStatus {
   id: number;
   status: StatusPedido;
-  input: { status: StatusPedido; numeroOrdem?: string; aviso?: string; cpf?: string };
+  input: { status: StatusPedido; numeroOrdem?: string; aviso?: string; cpf?: string; observacao?: string };
   idUsuario: number;
   arquivoTermo?: string;
 }
@@ -122,6 +122,39 @@ test("transicao invalida de status gera ValidationError", async () => {
     () => service.atualizarStatus(1, { id: 10 }, { status: StatusPedido.CONCLUIDO }),
     (err: unknown) => err instanceof ValidationError && /Transição inválida/.test((err as Error).message)
   );
+});
+
+test("CONFIRMADO permite marcar compra efetuada (sem numero de ordem manual)", async () => {
+  const { repo, chamadas } = criarRepoFake({ pedido: pedidoFixture(StatusPedido.CONFIRMADO) });
+  const service = new PedidoService(repo);
+
+  await service.atualizarStatus(1, { id: 10 }, { status: StatusPedido.EFETUADO });
+
+  assert.equal(chamadas.updateStatus.length, 1);
+  assert.equal(chamadas.updateStatus[0].status, StatusPedido.EFETUADO);
+  assert.equal(chamadas.updateStatus[0].input.numeroOrdem, undefined);
+});
+
+test("EFETUADO permite concluir entrega (registro de NF acontece fora do status)", async () => {
+  const { repo, chamadas } = criarRepoFake({ pedido: pedidoFixture(StatusPedido.EFETUADO) });
+  const geradorFake = { gerar: async () => Buffer.from("fake-docx") } as unknown as GeradorTermoRecebimentoDocx;
+  const service = new PedidoService(repo, geradorFake);
+
+  const arquivo = path.join(process.cwd(), "uploads", "termos", "TERMO-RECEBIMENTO-REQ-001.docx");
+  try {
+    await service.atualizarStatus(
+      1,
+      { id: 10, nome: "Fiscal de Teste" },
+      { status: StatusPedido.CONCLUIDO, cpf: "529.982.247-25", observacao: "Entrega completa e conferida" }
+    );
+
+    assert.equal(chamadas.updateStatus.length, 1);
+    assert.equal(chamadas.updateStatus[0].status, StatusPedido.CONCLUIDO);
+    assert.equal(chamadas.updateStatus[0].arquivoTermo, "TERMO-RECEBIMENTO-REQ-001.docx");
+    assert.equal(chamadas.updateStatus[0].input.observacao, "Entrega completa e conferida");
+  } finally {
+    await fs.rm(arquivo, { force: true });
+  }
 });
 
 test("pedido ja no status informado gera ValidationError", async () => {
