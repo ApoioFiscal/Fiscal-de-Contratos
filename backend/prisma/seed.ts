@@ -75,9 +75,7 @@ async function main() {
 
   const contratoExemplo = await prisma.licitacaoContrato.upsert({
     where: { numero: `LIC-${anoBase}-001` },
-    update: {
-      setores: { set: vincularSetores },
-    },
+    update: {},
     create: {
       numero: `LIC-${anoBase}-001`,
       numeroProcesso: `PRC-${anoBase}/001`,
@@ -119,9 +117,7 @@ async function main() {
   // (status RASCUNHO — aguarda o LIC clicar em "Gerar Contrato")
   const licitacaoPendente = await prisma.licitacaoContrato.upsert({
     where: { numero: `LIC-${anoBase}-002` },
-    update: {
-      setores: { set: vincularSetores },
-    },
+    update: {},
     create: {
       numero: `LIC-${anoBase}-002`,
       numeroProcesso: `PRC-${anoBase}/002`,
@@ -158,6 +154,17 @@ async function main() {
       },
     },
   });
+
+  // Garante as beneficiárias dos contratos de exemplo (FCON + secretarias que o
+  // gabinete cadastrou). Feito após o upsert para funcionar também em banco já
+  // existente (o upsert tem update vazio e não alteraria). delete → create em
+  // passos separados evita conflito de unicidade e ao menos uma vez é idempotente.
+  for (const exemplo of [contratoExemplo, licitacaoPendente]) {
+    await prisma.licitacaoSetor.deleteMany({ where: { idLicitacao: exemplo.id } });
+    await prisma.licitacaoSetor.createMany({
+      data: vincularSetores.map((v) => ({ ...v, idLicitacao: exemplo.id })),
+    });
+  }
 
   console.log('✅ Seed finalizado! Super Usuário garantido:', superAdmin.email);
   console.log('✅ Contrato de exemplo garantido:', contratoExemplo.numero);
