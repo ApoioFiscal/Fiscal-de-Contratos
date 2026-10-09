@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
     "build": "tsc",
-    "start": "node dist/server.js"
+    "start": "node dist/server.js",
+    "test": "node --test -r ts-node/register src/modules/pedido/pedido.service.test.ts"
   },
   "keywords": [],
   "author": "",

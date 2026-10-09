@@ -22,7 +22,10 @@ export class AppError extends Error {
   ) {
     super(message);
     this.name = "AppError";
-    Object.setPrototypeOf(this, AppError.prototype);
+    // Preserva o prototype da subclasse (new.target), garantindo que
+    // `instanceof ValidationError`, `instanceof NotFoundError`, etc.
+    // continuem funcionando mesmo após a transpilação para ES5.
+    Object.setPrototypeOf(this, new.target.prototype);
   }
 }
 

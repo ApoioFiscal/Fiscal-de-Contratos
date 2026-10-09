@@ -5,6 +5,7 @@ import { PedidoRepository } from "./pedido.repository";
 import { CreatePedidoInput, AtualizarStatusPedidoInput } from "../../common/schemas";
 import { ForbiddenError, NotFoundError, ValidationError } from "../../common/errors";
 import { GeradorTermoRecebimentoDocx } from "./geradorTermoRecebimento";
+import { gerarNumeroOrdem } from "./pedidoUtils";
 
 const TERMOS_DIR = path.join(process.cwd(), "uploads", "termos");
 
@@ -38,20 +39,6 @@ export class PedidoService {
   private gerarNumeroPedido(quantidade: number): string {
     const proximo = quantidade + 1;
     return `REQ-${String(proximo).padStart(3, "0")}`;
-  }
-
-  private normalizarSigla(sigla?: string | null): string {
-    const normalizada = (sigla ?? "")
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .toUpperCase()
-      .replace(/[^A-Z0-9-]/g, "");
-    return normalizada || "SEC";
-  }
-
-  private gerarNumeroOrdem(pedido: { idSetorCriador: number; setor: { sigla: string } | null }, seq: number): string {
-    const sigla = this.normalizarSigla(pedido.setor?.sigla);
-    return `OC-${sigla}-${String(seq).padStart(3, "0")}`;
   }
 
   private validarBeneficiaria(contrato: { setores: { idSetor: number }[] }, user: UsuarioAutenticado) {
@@ -162,7 +149,7 @@ export class PedidoService {
 
     if (input.status === StatusPedido.CONFIRMADO) {
       const totalOrdens = await this.repository.countOrdensPorSetor(pedido.idSetorCriador);
-      dados = { ...dados, numeroOrdem: this.gerarNumeroOrdem(pedido, totalOrdens + 1) };
+      dados = { ...dados, numeroOrdem: gerarNumeroOrdem(pedido.setor?.sigla, totalOrdens + 1) };
     }
 
     if (input.status === StatusPedido.CONCLUIDO) {
