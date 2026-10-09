@@ -54,26 +54,11 @@ export class EstoqueRepository {
           continue;
         }
 
-        const { _sum } = await tx.notaFiscalItem.aggregate({
-          where: {
-            idItemLicitado: linha.idItemLicitado,
-            notaFiscal: { idPedido: pedido.id },
-          },
-          _sum: { quantidade: true },
-        });
-
-        const recebido = _sum.quantidade ?? 0;
-        const restante = linhaPedido.quantidade - recebido;
-        const acumulado = porItem.get(linha.idItemLicitado)?.quantidade ?? 0;
-
-        if (acumulado + linha.quantidade > restante) {
-          erros[`itens.${linha.idItemLicitado}`] =
-            `Quantidade (${linha.quantidade}) excede o restante a receber do pedido (${restante})`;
-          continue;
-        }
-
+        // A quantidade recebida pode exceder a quantidade pedida (empresa pode
+        // entregar a mais). O valor recebido entra no estoque e fica registrado
+        // na movimentação; a baixa automática na conclusão consome o pedido.
         porItem.set(linha.idItemLicitado, {
-          quantidade: acumulado + linha.quantidade,
+          quantidade: (porItem.get(linha.idItemLicitado)?.quantidade ?? 0) + linha.quantidade,
           valorUnitario: linha.valorUnitario ?? linhaPedido.valorUnitario,
         });
       }

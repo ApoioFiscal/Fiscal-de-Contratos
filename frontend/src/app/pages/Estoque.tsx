@@ -368,7 +368,6 @@ function EntradaNotaModal({
                     <input
                       type="number"
                       min="0"
-                      max={item.quantidade}
                       placeholder="0"
                       value={quantidades[item.idItemLicitado] ?? ""}
                       onChange={(e) => setQuantidades((q) => ({ ...q, [item.idItemLicitado]: e.target.value }))}

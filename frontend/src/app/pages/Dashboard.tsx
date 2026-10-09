@@ -78,7 +78,7 @@ export function Dashboard() {
     { label: "Licitações Ativas", value: licitacoes.filter((l) => l.status === "ATIVA").length, icon: PackageSearch, color: "text-blue-600" },
     {
       label: "Pedidos em Andamento",
-      value: pedidos.filter((p) => ["PENDENTE", "CONFIRMADO", "EFETUADO", "ENTREGUE", "CONFERENCIA"].includes(p.status)).length,
+      value: pedidos.filter((p) => ["PENDENTE", "CONFIRMADO", "EFETUADO", "ENTREGUE"].includes(p.status)).length,
       icon: TrendingUp,
       color: "text-emerald-600",
     },

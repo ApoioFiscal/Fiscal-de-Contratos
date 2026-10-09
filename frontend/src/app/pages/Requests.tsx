@@ -4,7 +4,6 @@ import {
   listarMeusPedidos,
   criarPedido,
   atualizarStatusPedido,
-  registrarAvisoPedido,
   baixarTermoRecebimento,
   type CriarPedidoPayload,
 } from "@/services/pedidos";
@@ -39,7 +38,6 @@ const ORDEM_STATUS: StatusPedido[] = [
   "CONFIRMADO",
   "EFETUADO",
   "ENTREGUE",
-  "CONFERENCIA",
   "CONCLUIDO",
   "DEVOLVIDO",
   "CANCELADO",
@@ -50,7 +48,6 @@ const statusChip: Record<StatusPedido, string> = {
   CONFIRMADO: "bg-blue-100 text-blue-800",
   EFETUADO: "bg-violet-100 text-violet-800",
   ENTREGUE: "bg-cyan-100 text-cyan-800",
-  CONFERENCIA: "bg-yellow-100 text-yellow-800",
   CONCLUIDO: "bg-emerald-100 text-emerald-800",
   DEVOLVIDO: "bg-orange-100 text-orange-800",
   CANCELADO: "bg-slate-200 text-slate-600",
@@ -61,7 +58,6 @@ const statusIcon: Record<StatusPedido, typeof Clock> = {
   CONFIRMADO: ShoppingCart,
   EFETUADO: ReceiptText,
   ENTREGUE: Truck,
-  CONFERENCIA: ClipboardCheck,
   CONCLUIDO: CheckCircle,
   DEVOLVIDO: RotateCcw,
   CANCELADO: Ban,
@@ -98,10 +94,6 @@ export function Requests() {
 
   const [isEntregaOpen, setIsEntregaOpen] = useState(false);
   const [entregaPedido, setEntregaPedido] = useState<Pedido | null>(null);
-
-  const [isAvisoOpen, setIsAvisoOpen] = useState(false);
-  const [avisoPedido, setAvisoPedido] = useState<Pedido | null>(null);
-  const [avisoTexto, setAvisoTexto] = useState("");
 
   const [obsAberto, setObsAberto] = useState<number | null>(null);
 
@@ -232,28 +224,6 @@ export function Requests() {
     setIsEntregaOpen(true);
   };
 
-  const abrirAviso = (pedido: Pedido) => {
-    setAvisoPedido(pedido);
-    setAvisoTexto("");
-    setIsAvisoOpen(true);
-  };
-
-  const confirmarAviso = async () => {
-    if (!avisoPedido) return;
-    setCriando(true);
-    setError(null);
-    try {
-      await registrarAvisoPedido(avisoPedido.id, avisoTexto.trim());
-      setIsAvisoOpen(false);
-      setAvisoPedido(null);
-      reload();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Erro ao registrar aviso.");
-    } finally {
-      setCriando(false);
-    }
-  };
-
   const baixarTermo = async (pedido: Pedido) => {
     setError(null);
     try {
@@ -263,9 +233,9 @@ export function Requests() {
     }
   };
 
-  const acoesPorStatus = (pedido: Pedido): { kind: "status" | "entrega" | "aviso" | "termo"; status?: StatusPedido; label: string; icon: typeof Clock; cor: string }[] => {
+  const acoesPorStatus = (pedido: Pedido): { kind: "status" | "entrega" | "termo"; status?: StatusPedido; label: string; icon: typeof Clock; cor: string }[] => {
     if (!podeOperar) return [];
-    const btn = (label: string, icon: typeof Clock, cor: string, kind: "status" | "entrega" | "aviso" | "termo", status?: StatusPedido) => ({ kind, status, label, icon, cor });
+    const btn = (label: string, icon: typeof Clock, cor: string, kind: "status" | "entrega" | "termo", status?: StatusPedido) => ({ kind, status, label, icon, cor });
     switch (pedido.status) {
       case "PENDENTE":
         return [
@@ -278,21 +248,13 @@ export function Requests() {
         ];
       case "EFETUADO":
         return [
-          btn("Confirmar Entrega", ClipboardCheck, "bg-cyan-50 text-cyan-700 hover:bg-cyan-100 border-cyan-200", "entrega"),
-          btn("Informar Divergência", MessageSquareWarning, "bg-rose-50 text-rose-700 hover:bg-rose-100 border-rose-200", "aviso"),
-          btn("Devolver", RotateCcw, "bg-orange-50 text-orange-700 hover:bg-orange-100 border-orange-200", "status", "DEVOLVIDO"),
+          btn("Registrar Entrega", ClipboardCheck, "bg-cyan-50 text-cyan-700 hover:bg-cyan-100 border-cyan-200", "entrega"),
         ];
       case "ENTREGUE":
         return [
-          btn("Registrar Conferência", ClipboardCheck, "bg-yellow-50 text-yellow-700 hover:bg-yellow-100 border-yellow-200", "status", "CONFERENCIA"),
-          btn("Informar Problema", MessageSquareWarning, "bg-rose-50 text-rose-700 hover:bg-rose-100 border-rose-200", "aviso"),
+          btn("Concluir Pedido", CheckCircle, "bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border-emerald-200", "status", "CONCLUIDO"),
           btn("Devolver", RotateCcw, "bg-orange-50 text-orange-700 hover:bg-orange-100 border-orange-200", "status", "DEVOLVIDO"),
-        ];
-      case "CONFERENCIA":
-        return [
-          btn("Concluir", CheckCircle, "bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border-emerald-200", "status", "CONCLUIDO"),
-          btn("Informar Divergência", MessageSquareWarning, "bg-rose-50 text-rose-700 hover:bg-rose-100 border-rose-200", "aviso"),
-          btn("Devolver", RotateCcw, "bg-orange-50 text-orange-700 hover:bg-orange-100 border-orange-200", "status", "DEVOLVIDO"),
+          btn("Cancelar", Ban, "bg-slate-50 text-slate-600 hover:bg-slate-100 border-slate-200", "status", "CANCELADO"),
         ];
       case "CONCLUIDO":
         return [
@@ -303,10 +265,27 @@ export function Requests() {
     }
   };
 
+  const transicionarDireto = async (pedido: Pedido, status: StatusPedido) => {
+    setCriando(true);
+    setError(null);
+    try {
+      await atualizarStatusPedido(pedido.id, { status });
+      reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erro ao atualizar pedido.");
+    } finally {
+      setCriando(false);
+    }
+  };
+
   const handleAcao = (pedido: Pedido, acao: (typeof acoesPorStatus)[0]) => {
-    if (acao.kind === "status" && acao.status) abrirStatus(pedido, acao.status);
-    else if (acao.kind === "entrega") abrirEntrega(pedido);
-    else if (acao.kind === "aviso") abrirAviso(pedido);
+    if (acao.kind === "status" && acao.status) {
+      if (acao.status === "CONFIRMADO" || acao.status === "EFETUADO") {
+        transicionarDireto(pedido, acao.status);
+      } else {
+        abrirStatus(pedido, acao.status);
+      }
+    } else if (acao.kind === "entrega") abrirEntrega(pedido);
     else if (acao.kind === "termo") baixarTermo(pedido);
   };
 
@@ -317,7 +296,7 @@ export function Requests() {
           <h1 className="text-2xl font-bold text-slate-900">Pedidos e Ordens de Compra</h1>
           <p className="text-sm text-slate-500 mt-1">
             {podeOperar
-              ? "Fila de solicitações: acompanhe compra, entrega, conferência e conclusão."
+              ? "Fila de solicitações: acompanhe compra, entrega e conclusão."
               : "Solicitações do seu setor, prazos e avisos da Fiscalização."}
           </p>
         </div>
@@ -480,8 +459,9 @@ export function Requests() {
                       {acoesPorStatus(pedido).map((acao, i) => (
                         <button
                           key={i}
+                          disabled={criando}
                           onClick={() => handleAcao(pedido, acao)}
-                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${acao.cor}`}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors disabled:opacity-40 ${acao.cor}`}
                         >
                           <acao.icon className="w-3.5 h-3.5" />
                           {acao.label}
@@ -685,32 +665,17 @@ export function Requests() {
           <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl">
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
               <h3 className="text-lg font-bold text-slate-900">
-                {novoStatus === "CONFIRMADO"
-                  ? "Registrar Compra"
-                  : novoStatus === "EFETUADO"
-                    ? "Compra Efetuada"
-                    : `Alterar para ${STATUS_PEDIDO_LABEL[novoStatus]}`} — {statusPedido.numeroPedido}
+                {novoStatus === "CONCLUIDO"
+                  ? "Concluir Pedido"
+                  : novoStatus === "DEVOLVIDO"
+                    ? "Devolver Pedido"
+                    : "Cancelar Pedido"} — {statusPedido.numeroPedido}
               </h3>
               <button onClick={() => setIsStatusOpen(false)} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100">
                 <X className="w-5 h-5" />
               </button>
             </div>
             <div className="px-6 py-5 space-y-4">
-              {novoStatus === "CONFIRMADO" && (
-                <div>
-                  <p className="text-sm text-slate-600">
-                    A <strong>Ordem de Compra</strong> será gerada automaticamente (<span className="font-mono">OC-&lt;sigla&gt;-&lt;seq&gt;</span>) ao confirmar a compra.
-                  </p>
-                </div>
-              )}
-              {novoStatus === "EFETUADO" && (
-                <div>
-                  <p className="text-sm text-slate-600">
-                    O pedido passará para <strong>Compra Efetuada</strong> e a secretaria será informada. A{" "}
-                    <strong>nota fiscal</strong> será registrada quando o fiscal confirmar a entrega.
-                  </p>
-                </div>
-              )}
               {(novoStatus === "DEVOLVIDO" || novoStatus === "CANCELADO") && (
                 <p className="text-sm text-slate-600">
                   O pedido <strong>{statusPedido.numeroPedido}</strong> será marcado como{" "}
@@ -733,15 +698,10 @@ export function Requests() {
                     />
                   </div>
                   <p className="text-sm text-slate-600">
-                    Ao concluir, as quantidades do pedido serão <strong>descontadas automaticamente</strong> do saldo do contrato e o{" "}
-                    <strong>Termo de Recebimento</strong> será gerado com o CPF acima.
+                    Ao concluir, o <strong>Termo de Recebimento</strong> será gerado com o CPF acima e o
+                    pedido sairá da fila do FCON.
                   </p>
                 </>
-              )}
-              {!["CONFIRMADO", "EFETUADO", "DEVOLVIDO", "CANCELADO", "CONCLUIDO"].includes(novoStatus) && (
-                <p className="text-sm text-slate-600">
-                  O pedido passará para <strong>{STATUS_PEDIDO_LABEL[novoStatus]}</strong>.
-                </p>
               )}
             </div>
             <div className="px-6 py-4 border-t border-slate-200 flex justify-end gap-3">
@@ -775,57 +735,21 @@ export function Requests() {
                 idPedido: payload.idPedido,
                 numeroNota: payload.numeroNota,
                 dataEmissao: payload.dataEmissao,
+                observacao: payload.observacao,
                 itens: payload.itens,
               });
               await atualizarStatusPedido(payload.idPedido, {
-                status: "CONCLUIDO",
-                cpf: payload.cpf,
+                status: "ENTREGUE",
                 observacao: payload.observacao,
               });
               setIsEntregaOpen(false);
               setEntregaPedido(null);
               reload();
             } catch (err) {
-              setError(err instanceof Error ? err.message : "Erro ao confirmar a entrega.");
+              setError(err instanceof Error ? err.message : "Erro ao registrar a entrega.");
             }
           }}
         />
-      )}
-
-      {isAvisoOpen && avisoPedido && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
-              <h3 className="text-lg font-bold text-slate-900">Informar à secretaria — {avisoPedido.numeroPedido}</h3>
-              <button onClick={() => setIsAvisoOpen(false)} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="px-6 py-5 space-y-4">
-              <label className="block text-sm font-medium text-slate-700 mb-1">Descrição do aviso <span className="text-red-500">*</span></label>
-              <textarea
-                rows={4}
-                value={avisoTexto}
-                onChange={(e) => setAvisoTexto(e.target.value)}
-                placeholder="Ex.: entrega veio parcial, item com avaria, estoque divergente..."
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-              />
-            </div>
-            <div className="px-6 py-4 border-t border-slate-200 flex justify-end gap-3">
-              <button onClick={() => setIsAvisoOpen(false)} className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-xl">
-                Cancelar
-              </button>
-              <button
-                onClick={confirmarAviso}
-                disabled={avisoTexto.trim().length < 3 || criando}
-                className="flex items-center gap-2 px-5 py-2 text-sm font-medium text-white bg-rose-600 hover:bg-rose-700 disabled:opacity-40 rounded-xl"
-              >
-                {criando && <Loader2 className="w-4 h-4 animate-spin" />}
-                Registrar Aviso
-              </button>
-            </div>
-          </div>
-        </div>
       )}
 
       {obsAberto !== null && (() => {
@@ -864,6 +788,7 @@ function NovoPedidoModal({
   const [idContrato, setIdContrato] = useState<number | "">("");
   const [itens, setItens] = useState<{ idItemLicitado: number; quantidade: string }[]>([]);
   const [dataPrevista, setDataPrevista] = useState("");
+  const [observacao, setObservacao] = useState("");
 
   const contrato = contratos.find((c) => c.id === idContrato);
 
@@ -887,6 +812,7 @@ function NovoPedidoModal({
     onSalvar({
       idContrato: Number(idContrato),
       dataPrevistaEntrega: dataPrevista,
+      observacao: observacao.trim() || undefined,
       itens: selecionados.map((s) => ({ idItemLicitado: s.item!.id, quantidade: s.quantidade })),
     });
   };
@@ -931,6 +857,17 @@ function NovoPedidoModal({
               type="date"
               value={dataPrevista}
               onChange={(e) => setDataPrevista(e.target.value)}
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Observação</label>
+            <input
+              type="text"
+              value={observacao}
+              onChange={(e) => setObservacao(e.target.value)}
+              placeholder="Informações que a Fiscalização deve saber sobre este pedido..."
               className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
@@ -1000,7 +937,6 @@ function ConfirmarEntregaModal({
     idPedido: number;
     numeroNota: string;
     dataEmissao: string;
-    cpf: string;
     observacao?: string;
     itens: { idItemLicitado: number; quantidade: number }[];
   }) => Promise<void>;
@@ -1012,7 +948,6 @@ function ConfirmarEntregaModal({
     Object.fromEntries(pedido.itens.map((i) => [i.idItemLicitado, String(i.quantidade)]))
   );
   const [observacao, setObservacao] = useState("");
-  const [cpf, setCpf] = useState("");
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -1021,8 +956,7 @@ function ConfirmarEntregaModal({
     .map((item) => ({ idItemLicitado: item.idItemLicitado, quantidade: Number(quantidades[item.idItemLicitado]) || 0 }))
     .filter((s) => s.quantidade > 0);
 
-  const cpfValido = cpf.replace(/\D/g, "").length === 11;
-  const valido = Boolean(numeroNota.trim()) && Boolean(dataEmissao) && selecionados.length > 0 && cpfValido;
+  const valido = Boolean(numeroNota.trim()) && Boolean(dataEmissao) && selecionados.length > 0;
 
   const handlePdfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -1078,7 +1012,6 @@ function ConfirmarEntregaModal({
         idPedido: pedido.id,
         numeroNota: numeroNota.trim(),
         dataEmissao,
-        cpf: cpf.replace(/\D/g, ""),
         observacao: observacao.trim() || undefined,
         itens: selecionados,
       });
@@ -1092,9 +1025,9 @@ function ConfirmarEntregaModal({
       <div className="w-full max-w-xl bg-white flex flex-col shadow-2xl animate-in slide-in-from-right duration-300">
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
           <div>
-            <h3 className="text-lg font-bold text-slate-900">Confirmar Entrega</h3>
+            <h3 className="text-lg font-bold text-slate-900">Registrar Entrega</h3>
             <p className="text-xs text-slate-500 mt-1">
-              {pedido.numeroPedido} — registra a NF, recebe os itens e gera o termo de recebimento.
+              {pedido.numeroPedido} — registra a NF e as quantidades recebidas para a conferência.
             </p>
           </div>
           <button onClick={onCancel} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100">
@@ -1162,7 +1095,6 @@ function ConfirmarEntregaModal({
                   <input
                     type="number"
                     min="0"
-                    max={item.quantidade}
                     inputMode="decimal"
                     value={quantidades[item.idItemLicitado] ?? ""}
                     onChange={(e) =>
@@ -1179,21 +1111,7 @@ function ConfirmarEntregaModal({
 
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">
-              CPF do fiscal <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              inputMode="numeric"
-              value={cpf}
-              onChange={(e) => setCpf(mascaraCpf(e.target.value))}
-              placeholder="000.000.000-00"
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
-              Observações da entrega <span className="text-slate-400">(detalhe o que aconteceu)</span>
+              Observações da entrega
             </label>
             <textarea
               rows={3}
@@ -1214,7 +1132,7 @@ function ConfirmarEntregaModal({
             className="flex items-center gap-2 px-5 py-2 text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 rounded-xl"
           >
             {salvando && <Loader2 className="w-4 h-4 animate-spin" />}
-            Confirmar Entrega e Concluir
+            Registrar Entrega
           </button>
         </div>
       </div>

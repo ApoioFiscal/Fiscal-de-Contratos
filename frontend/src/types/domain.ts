@@ -10,7 +10,6 @@ export type StatusPedido =
   | "CONFIRMADO"
   | "EFETUADO"
   | "ENTREGUE"
-  | "CONFERENCIA"
   | "CONCLUIDO"
   | "DEVOLVIDO"
   | "CANCELADO";
@@ -216,7 +215,6 @@ export const STATUS_PEDIDO_LABEL: Record<StatusPedido, string> = {
   CONFIRMADO: "Em Compra",
   EFETUADO: "Efetuado",
   ENTREGUE: "Entregue",
-  CONFERENCIA: "Conferência",
   CONCLUIDO: "Concluído",
   DEVOLVIDO: "Devolvido",
   CANCELADO: "Cancelado",

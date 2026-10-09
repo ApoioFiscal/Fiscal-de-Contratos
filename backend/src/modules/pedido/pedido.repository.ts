@@ -86,7 +86,6 @@ export class PedidoRepository {
               StatusPedido.CONFIRMADO,
               StatusPedido.EFETUADO,
               StatusPedido.ENTREGUE,
-              StatusPedido.CONFERENCIA,
             ],
           },
         },

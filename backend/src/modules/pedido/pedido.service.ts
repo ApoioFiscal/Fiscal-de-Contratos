@@ -17,14 +17,15 @@ interface UsuarioAutenticado {
 }
 
 // Transições de status permitidas no ciclo do pedido.
-// O registro da nota fiscal acontece na etapa de "Confirmar Entrega" (EFETUADO -> CONCLUIDO),
-// que também gera o termo. ENTREGUE/CONFERENCIA permanecem apenas para pedidos legados.
+// O registro da nota fiscal acontece na etapa de "Registrar Entrega"
+// (EFETUADO -> ENTREGUE). A conferência faz parte do ENTREGUE: no fim, o
+// fiscal conclui (gera o termo), devolve ou cancela. O valor CONFERENCIA foi
+// removido do enum StatusPedido (ver prisma/remover_conferencia.sql).
 const TRANSICOES: Record<StatusPedido, StatusPedido[]> = {
   [StatusPedido.PENDENTE]: [StatusPedido.CONFIRMADO, StatusPedido.CANCELADO],
   [StatusPedido.CONFIRMADO]: [StatusPedido.EFETUADO, StatusPedido.CANCELADO],
-  [StatusPedido.EFETUADO]: [StatusPedido.ENTREGUE, StatusPedido.CONCLUIDO, StatusPedido.DEVOLVIDO],
-  [StatusPedido.ENTREGUE]: [StatusPedido.CONFERENCIA, StatusPedido.DEVOLVIDO],
-  [StatusPedido.CONFERENCIA]: [StatusPedido.CONCLUIDO, StatusPedido.DEVOLVIDO],
+  [StatusPedido.EFETUADO]: [StatusPedido.ENTREGUE],
+  [StatusPedido.ENTREGUE]: [StatusPedido.CONCLUIDO, StatusPedido.DEVOLVIDO, StatusPedido.CANCELADO],
   [StatusPedido.CONCLUIDO]: [],
   [StatusPedido.DEVOLVIDO]: [],
   [StatusPedido.CANCELADO]: [],

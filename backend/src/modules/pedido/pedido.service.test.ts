@@ -135,8 +135,38 @@ test("CONFIRMADO permite marcar compra efetuada (sem numero de ordem manual)", a
   assert.equal(chamadas.updateStatus[0].input.numeroOrdem, undefined);
 });
 
-test("EFETUADO permite concluir entrega (registro de NF acontece fora do status)", async () => {
+test("EFETUADO permite registrar entrega (vai para ENTREGUE) sem gerar termo", async () => {
   const { repo, chamadas } = criarRepoFake({ pedido: pedidoFixture(StatusPedido.EFETUADO) });
+  const service = new PedidoService(repo);
+
+  await service.atualizarStatus(
+    1,
+    { id: 10, nome: "Fiscal" },
+    { status: StatusPedido.ENTREGUE, observacao: "Entrega parcial, faltou 1 caixa" }
+  );
+
+  assert.equal(chamadas.updateStatus.length, 1);
+  assert.equal(chamadas.updateStatus[0].status, StatusPedido.ENTREGUE);
+  assert.equal(chamadas.updateStatus[0].input.observacao, "Entrega parcial, faltou 1 caixa");
+  assert.equal(chamadas.updateStatus[0].arquivoTermo, undefined);
+});
+
+test("EFETUADO nao permite concluir direto (CONCLUIDO so a partir de ENTREGUE)", async () => {
+  const { repo } = criarRepoFake({ pedido: pedidoFixture(StatusPedido.EFETUADO) });
+  const service = new PedidoService(repo);
+
+  await assert.rejects(
+    () => service.atualizarStatus(1, { id: 10 }, { status: StatusPedido.CONCLUIDO }),
+    (err: unknown) => err instanceof ValidationError && /Transição inválida/.test((err as Error).message)
+  );
+  await assert.rejects(
+    () => service.atualizarStatus(1, { id: 10 }, { status: StatusPedido.DEVOLVIDO }),
+    (err: unknown) => err instanceof ValidationError && /Transição inválida/.test((err as Error).message)
+  );
+});
+
+test("ENTREGUE permite concluir (gera termo) com CPF valido", async () => {
+  const { repo, chamadas } = criarRepoFake({ pedido: pedidoFixture(StatusPedido.ENTREGUE) });
   const geradorFake = { gerar: async () => Buffer.from("fake-docx") } as unknown as GeradorTermoRecebimentoDocx;
   const service = new PedidoService(repo, geradorFake);
 
@@ -145,16 +175,27 @@ test("EFETUADO permite concluir entrega (registro de NF acontece fora do status)
     await service.atualizarStatus(
       1,
       { id: 10, nome: "Fiscal de Teste" },
-      { status: StatusPedido.CONCLUIDO, cpf: "529.982.247-25", observacao: "Entrega completa e conferida" }
+      { status: StatusPedido.CONCLUIDO, cpf: "529.982.247-25" }
     );
 
     assert.equal(chamadas.updateStatus.length, 1);
     assert.equal(chamadas.updateStatus[0].status, StatusPedido.CONCLUIDO);
     assert.equal(chamadas.updateStatus[0].arquivoTermo, "TERMO-RECEBIMENTO-REQ-001.docx");
-    assert.equal(chamadas.updateStatus[0].input.observacao, "Entrega completa e conferida");
   } finally {
     await fs.rm(arquivo, { force: true });
   }
+});
+
+test("ENTREGUE permite devolver ou cancelar o pedido", async () => {
+  const { repo, chamadas } = criarRepoFake({ pedido: pedidoFixture(StatusPedido.ENTREGUE) });
+  const service = new PedidoService(repo);
+
+  await service.atualizarStatus(1, { id: 10 }, { status: StatusPedido.DEVOLVIDO });
+  await service.atualizarStatus(1, { id: 10 }, { status: StatusPedido.CANCELADO });
+
+  assert.equal(chamadas.updateStatus.length, 2);
+  assert.equal(chamadas.updateStatus[0].status, StatusPedido.DEVOLVIDO);
+  assert.equal(chamadas.updateStatus[1].status, StatusPedido.CANCELADO);
 });
 
 test("pedido ja no status informado gera ValidationError", async () => {
@@ -182,7 +223,7 @@ test("pedido inexistente gera NotFoundError antes de transicionar", async () => 
 });
 
 test("CONCLUIDO sem CPF valido gera ValidationError e nao persiste termo", async () => {
-  const { repo, chamadas } = criarRepoFake({ pedido: pedidoFixture(StatusPedido.CONFERENCIA) });
+  const { repo, chamadas } = criarRepoFake({ pedido: pedidoFixture(StatusPedido.ENTREGUE) });
   const service = new PedidoService(repo);
 
   await assert.rejects(
@@ -206,7 +247,7 @@ test("CONCLUIDO com CPF valido gera e persiste o termo de recebimento", async ()
   } as unknown as GeradorTermoRecebimentoDocx;
 
   try {
-    const { repo, chamadas } = criarRepoFake({ pedido: pedidoFixture(StatusPedido.CONFERENCIA) });
+    const { repo, chamadas } = criarRepoFake({ pedido: pedidoFixture(StatusPedido.ENTREGUE) });
     const service = new PedidoService(repo, geradorFake);
 
     await service.atualizarStatus(
@@ -229,7 +270,7 @@ test("CONCLUIDO com CPF valido gera e persiste o termo de recebimento", async ()
 
 test("obterArquivoTermo falha quando termo ainda nao foi gerado", async () => {
   const { repo } = criarRepoFake({
-    pedido: { ...pedidoFixture(StatusPedido.CONFERENCIA), arquivoTermo: null },
+    pedido: { ...pedidoFixture(StatusPedido.ENTREGUE), arquivoTermo: null },
   });
   const service = new PedidoService(repo);
 
