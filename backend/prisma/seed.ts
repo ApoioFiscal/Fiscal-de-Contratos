@@ -62,9 +62,22 @@ async function main() {
   const fimVigencia = new Date();
   fimVigencia.setMonth(fimVigencia.getMonth() + 12);
 
+  // Beneficiárias dos contratos de exemplo: FCON + todas as secretarias que o
+  // gabinete já cadastrou (nada é fixado no seed — quem cadastra secretaria é
+  // o gabinete, e ela automaticamente passa a ser beneficiária dos exemplos).
+  const secretariasCadastradas = await prisma.setor.findMany({
+    where: { sigla: { notIn: ['GAB', 'LIC', 'FCON'] } },
+    select: { id: true },
+  });
+  const vincularSetores = [setorFiscalizacao.id, ...secretariasCadastradas.map((s) => s.id)].map(
+    (idSetor) => ({ idSetor })
+  );
+
   const contratoExemplo = await prisma.licitacaoContrato.upsert({
     where: { numero: `LIC-${anoBase}-001` },
-    update: {},
+    update: {
+      setores: { set: vincularSetores },
+    },
     create: {
       numero: `LIC-${anoBase}-001`,
       numeroProcesso: `PRC-${anoBase}/001`,
@@ -97,7 +110,7 @@ async function main() {
         ],
       },
       setores: {
-        create: [{ idSetor: setorFiscalizacao.id }],
+        create: vincularSetores,
       },
     },
   });
@@ -106,7 +119,9 @@ async function main() {
   // (status RASCUNHO — aguarda o LIC clicar em "Gerar Contrato")
   const licitacaoPendente = await prisma.licitacaoContrato.upsert({
     where: { numero: `LIC-${anoBase}-002` },
-    update: {},
+    update: {
+      setores: { set: vincularSetores },
+    },
     create: {
       numero: `LIC-${anoBase}-002`,
       numeroProcesso: `PRC-${anoBase}/002`,
@@ -139,7 +154,7 @@ async function main() {
         ],
       },
       setores: {
-        create: [{ idSetor: setorFiscalizacao.id }],
+        create: vincularSetores,
       },
     },
   });
