@@ -35,6 +35,16 @@ async function main() {
     },
   });
 
+  // Setor de exemplo de Secretaria beneficiária (para testar o fluxo de pedidos)
+  const setorSaude = await prisma.setor.upsert({
+    where: { sigla: 'SSAU' },
+    update: {},
+    create: {
+      nome: 'Secretaria Municipal de Saúde',
+      sigla: 'SSAU',
+    },
+  });
+
   // Cria a senha criptografada (padrão 123456)
   const senhaHash = await bcrypt.hash('123456', 12);
 
@@ -57,6 +67,44 @@ async function main() {
     },
   });
 
+  // Usuários de teste nos três perfis (senha 123456) — usados pelos testes e2e
+  // e úteis para validar manualmente o fluxo de pedidos por secretaria.
+  const usuariosTeste = [
+    {
+      nome: 'Secretário de Saúde',
+      email: 'saude@marizopolis.gov.br',
+      funcao: FuncaoUsuario.SECRETARIO,
+      idSetor: setorSaude.id,
+    },
+    {
+      nome: 'Gestor de Licitações',
+      email: 'lic@marizopolis.gov.br',
+      funcao: FuncaoUsuario.SECRETARIO,
+      idSetor: setorLicitacoes.id,
+    },
+    {
+      nome: 'Fiscal de Contratos',
+      email: 'fcon@marizopolis.gov.br',
+      funcao: FuncaoUsuario.SECRETARIO,
+      idSetor: setorFiscalizacao.id,
+    },
+  ];
+
+  for (const u of usuariosTeste) {
+    await prisma.usuario.upsert({
+      where: { email: u.email },
+      update: {},
+      create: {
+        nome: u.nome,
+        email: u.email,
+        senha: senhaHash,
+        funcao: u.funcao,
+        isAdmin: false,
+        idSetor: u.idSetor,
+      },
+    });
+  }
+
   // Garante um contrato de exemplo com itens, para desenvolvimento das telas
   const anoBase = new Date().getFullYear();
   const fimVigencia = new Date();
@@ -64,7 +112,12 @@ async function main() {
 
   const contratoExemplo = await prisma.licitacaoContrato.upsert({
     where: { numero: `LIC-${anoBase}-001` },
-    update: {},
+    update: {
+      // Garante as beneficiárias mesmo em re-execuções do seed (upsert com update vazio não alteraria)
+      setores: {
+        set: [{ idSetor: setorFiscalizacao.id }, { idSetor: setorSaude.id }],
+      },
+    },
     create: {
       numero: `LIC-${anoBase}-001`,
       numeroProcesso: `PRC-${anoBase}/001`,
@@ -97,7 +150,7 @@ async function main() {
         ],
       },
       setores: {
-        create: [{ idSetor: setorFiscalizacao.id }],
+        create: [{ idSetor: setorFiscalizacao.id }, { idSetor: setorSaude.id }],
       },
     },
   });
