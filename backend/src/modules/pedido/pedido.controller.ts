@@ -36,7 +36,7 @@ export class PedidoController {
     const id = Number(req.params.id);
     const pedido = await this.service.atualizarStatus(
       id,
-      { id: req.user?.id as number },
+      { id: req.user?.id as number, nome: req.user?.nome },
       req.body
     );
     sendSuccess(res, pedido);
@@ -54,17 +54,9 @@ export class PedidoController {
 
   async downloadTermoRecebimento(req: Request, res: Response): Promise<void> {
     const id = Number(req.params.id);
-    const cpf = typeof req.query.cpf === "string" ? req.query.cpf : undefined;
-    const { buffer, filename } = await this.service.gerarTermoRecebimento(
-      id,
-      req.user?.nome || "Fiscal de Contratos",
-      cpf
-    );
-    res.setHeader(
-      "Content-Type",
-      "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-    );
+    const { caminho, filename } = await this.service.obterArquivoTermo(id);
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
     res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
-    res.send(buffer);
+    res.sendFile(caminho);
   }
 }

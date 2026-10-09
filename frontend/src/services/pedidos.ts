@@ -10,7 +10,7 @@ export interface CriarPedidoPayload {
 
 export interface AtualizarStatusPedidoPayload {
   status: StatusPedido;
-  numeroOrdem?: string;
+  cpf?: string;
   aviso?: string;
 }
 
@@ -59,15 +59,14 @@ export async function registrarAvisoPedido(
   });
 }
 
-export async function baixarTermoRecebimento(id: number, cpf?: string): Promise<void> {
+export async function baixarTermoRecebimento(id: number): Promise<void> {
   const token = localStorage.getItem("token");
-  const query = cpf?.trim() ? `?cpf=${encodeURIComponent(cpf.trim())}` : "";
-  const response = await fetch(`${API_BASE_URL}/pedidos/${id}/termo${query}`, {
+  const response = await fetch(`${API_BASE_URL}/pedidos/${id}/termo`, {
     headers: token ? { Authorization: `Bearer ${token}` } : undefined,
   });
 
   if (!response.ok) {
-    throw new Error("Não foi possível gerar o termo de recebimento.");
+    throw new Error("O termo de recebimento ainda não foi gerado.");
   }
 
   const blob = await response.blob();

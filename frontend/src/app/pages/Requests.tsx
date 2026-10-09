@@ -15,7 +15,7 @@ import { format, parseISO, isAfter, startOfToday } from "date-fns";
 import {
   Plus, Search, FileText, CheckCircle, Clock, AlertCircle, X, Loader2,
   ChevronDown, ChevronUp, ShoppingCart, Truck, Ban, RotateCcw, ClipboardCheck,
-  MessageSquareWarning, ReceiptText, Upload, FileDown, Filter
+  MessageSquareWarning, ReceiptText, Upload, FileDown, Filter, Maximize2
 } from "lucide-react";
 import type { ItemSaldo, Licitacao, Movimentacao, Pedido, StatusPedido } from "@/types/domain";
 import { STATUS_PEDIDO_LABEL } from "@/types/domain";
@@ -85,7 +85,7 @@ export function Requests() {
   const [isStatusOpen, setIsStatusOpen] = useState(false);
   const [statusPedido, setStatusPedido] = useState<Pedido | null>(null);
   const [novoStatus, setNovoStatus] = useState<StatusPedido>("CONFIRMADO");
-  const [numeroOrdem, setNumeroOrdem] = useState("");
+  const [cpfStatus, setCpfStatus] = useState("");
   const [avisoStatus, setAvisoStatus] = useState("");
 
   const [isNotaOpen, setIsNotaOpen] = useState(false);
@@ -95,10 +95,7 @@ export function Requests() {
   const [avisoPedido, setAvisoPedido] = useState<Pedido | null>(null);
   const [avisoTexto, setAvisoTexto] = useState("");
 
-  const [isTermoOpen, setIsTermoOpen] = useState(false);
-  const [termoPedido, setTermoPedido] = useState<Pedido | null>(null);
-  const [termoCpf, setTermoCpf] = useState("");
-  const [gerandoTermo, setGerandoTermo] = useState(false);
+  const [obsAberto, setObsAberto] = useState<number | null>(null);
 
   const [saldos, setSaldos] = useState<ItemSaldo[]>([]);
   const [movs, setMovs] = useState<Movimentacao[]>([]);
@@ -199,7 +196,7 @@ export function Requests() {
   const abrirStatus = (pedido: Pedido, status: StatusPedido) => {
     setStatusPedido(pedido);
     setNovoStatus(status);
-    setNumeroOrdem("");
+    setCpfStatus("");
     setAvisoStatus("");
     setIsStatusOpen(true);
   };
@@ -211,7 +208,7 @@ export function Requests() {
     try {
       await atualizarStatusPedido(statusPedido.id, {
         status: novoStatus,
-        numeroOrdem: novoStatus === "CONFIRMADO" ? numeroOrdem.trim() || undefined : undefined,
+        cpf: novoStatus === "CONCLUIDO" ? cpfStatus.trim() || undefined : undefined,
         aviso: avisoStatus.trim() || undefined,
       });
       setIsStatusOpen(false);
@@ -251,19 +248,12 @@ export function Requests() {
     }
   };
 
-  const gerarTermo = async () => {
-    if (!termoPedido) return;
-    setGerandoTermo(true);
+  const baixarTermo = async (pedido: Pedido) => {
     setError(null);
     try {
-      await baixarTermoRecebimento(termoPedido.id, termoCpf);
-      setIsTermoOpen(false);
-      setTermoPedido(null);
-      setTermoCpf("");
+      await baixarTermoRecebimento(pedido.id);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Erro ao gerar termo.");
-    } finally {
-      setGerandoTermo(false);
+      setError(err instanceof Error ? err.message : "Erro ao baixar o termo.");
     }
   };
 
@@ -295,7 +285,6 @@ export function Requests() {
         return [
           btn("Concluir", CheckCircle, "bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border-emerald-200", "status", "CONCLUIDO"),
           btn("Informar Divergência", MessageSquareWarning, "bg-rose-50 text-rose-700 hover:bg-rose-100 border-rose-200", "aviso"),
-          btn("Termo de Recebimento", FileDown, "bg-slate-50 text-slate-700 hover:bg-slate-100 border-slate-300", "termo"),
           btn("Devolver", RotateCcw, "bg-orange-50 text-orange-700 hover:bg-orange-100 border-orange-200", "status", "DEVOLVIDO"),
         ];
       case "CONCLUIDO":
@@ -311,11 +300,7 @@ export function Requests() {
     if (acao.kind === "status" && acao.status) abrirStatus(pedido, acao.status);
     else if (acao.kind === "nota") abrirNota(pedido);
     else if (acao.kind === "aviso") abrirAviso(pedido);
-    else if (acao.kind === "termo") {
-      setTermoPedido(pedido);
-      setTermoCpf("");
-      setIsTermoOpen(true);
-    }
+    else if (acao.kind === "termo") baixarTermo(pedido);
   };
 
   return (
@@ -436,6 +421,14 @@ export function Requests() {
             const total = pedido.itens.reduce((s, i) => s + i.valorTotal, 0);
             const expandido = expandedId === pedido.id;
             const prazoVencido = atrasado(pedido);
+            const idItensPedido = new Set(pedido.itens.map((i) => i.idItemLicitado));
+            const movsPedido = movs.filter((m) => m.idPedido === pedido.id);
+            const recebidoPorItem = new Map<number, number>();
+            for (const m of movsPedido) {
+              if (m.tipo === "ENTRADA") {
+                recebidoPorItem.set(m.idItemLicitado, (recebidoPorItem.get(m.idItemLicitado) ?? 0) + m.quantidade);
+              }
+            }
             return (
               <div key={pedido.id} className="hover:bg-slate-50 transition-colors">
                 <div className="p-4 sm:px-6">
@@ -467,7 +460,7 @@ export function Requests() {
                     </div>
                   </div>
 
-                  {pedido.historico?.some((h) => h.tipo === "AVISO") && (
+                  {!podeOperar && pedido.historico?.some((h) => h.tipo === "AVISO") && (
                     <div className="mt-2 flex items-center gap-2 text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-3 py-1.5">
                       <MessageSquareWarning className="w-4 h-4 shrink-0" />
                       Há avisos da Fiscalização neste pedido — confira a timeline.
@@ -486,6 +479,18 @@ export function Requests() {
                           {acao.label}
                         </button>
                       ))}
+                    </div>
+                  )}
+
+                  {!podeOperar && pedido.status === "CONCLUIDO" && pedido.arquivoTermo && (
+                    <div className="mt-3">
+                      <button
+                        onClick={() => baixarTermo(pedido)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors bg-slate-50 text-slate-700 hover:bg-slate-100 border-slate-300"
+                      >
+                        <FileDown className="w-3.5 h-3.5" />
+                        Termo de Recebimento
+                      </button>
                     </div>
                   )}
 
@@ -522,35 +527,50 @@ export function Requests() {
                         </div>
                         <div>
                           <span className="block text-xs text-slate-500 mb-1">Observação</span>
-                          <span className="font-medium text-slate-900 line-clamp-1">{pedido.observacao || "—"}</span>
+                          {pedido.observacao ? (
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-medium text-slate-900 line-clamp-1">{pedido.observacao}</span>
+                              <button
+                                onClick={() => setObsAberto(pedido.id)}
+                                aria-label="Ver observação completa"
+                                className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100"
+                              >
+                                <Maximize2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="font-medium text-slate-900">—</span>
+                          )}
                         </div>
                       </div>
 
-                      <table className="min-w-full text-sm bg-white border border-slate-200 rounded-lg">
-                        <thead className="bg-slate-50">
-                          <tr>
-                            <th className="px-3 py-2 text-left font-medium text-slate-500">Item</th>
-                            <th className="px-3 py-2 text-right font-medium text-slate-500">Un.</th>
-                            <th className="px-3 py-2 text-right font-medium text-slate-500">Qtd.</th>
-                            <th className="px-3 py-2 text-right font-medium text-slate-500">Valor Unit.</th>
-                            <th className="px-3 py-2 text-right font-medium text-slate-500">Total</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100">
-                          {pedido.itens.map((item) => (
-                            <tr key={item.id}>
-                              <td className="px-3 py-2 text-slate-900">
-                                {item.itemLicitado?.descricao || `Item ${item.idItemLicitado}`}
-                                {item.itemLicitado?.marca ? ` (${item.itemLicitado.marca})` : ""}
-                              </td>
-                              <td className="px-3 py-2 text-right text-slate-700">{item.itemLicitado?.unidade || "—"}</td>
-                              <td className="px-3 py-2 text-right text-slate-700">{item.quantidade}</td>
-                              <td className="px-3 py-2 text-right text-slate-700">{fmt.format(item.valorUnitario)}</td>
-                              <td className="px-3 py-2 text-right font-medium text-slate-900">{fmt.format(item.valorTotal)}</td>
+                      <div className="max-h-64 overflow-auto">
+                        <table className="min-w-full text-sm bg-white border border-slate-200 rounded-lg">
+                          <thead className="bg-slate-50">
+                            <tr>
+                              <th className="px-3 py-2 text-left font-medium text-slate-500">Item</th>
+                              <th className="px-3 py-2 text-right font-medium text-slate-500">Un.</th>
+                              <th className="px-3 py-2 text-right font-medium text-slate-500">Qtd.</th>
+                              <th className="px-3 py-2 text-right font-medium text-slate-500">Valor Unit.</th>
+                              <th className="px-3 py-2 text-right font-medium text-slate-500">Total</th>
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {pedido.itens.map((item) => (
+                              <tr key={item.id}>
+                                <td className="px-3 py-2 text-slate-900">
+                                  {item.itemLicitado?.descricao || `Item ${item.idItemLicitado}`}
+                                  {item.itemLicitado?.marca ? ` (${item.itemLicitado.marca})` : ""}
+                                </td>
+                                <td className="px-3 py-2 text-right text-slate-700">{item.itemLicitado?.unidade || "—"}</td>
+                                <td className="px-3 py-2 text-right text-slate-700">{item.quantidade}</td>
+                                <td className="px-3 py-2 text-right text-slate-700">{fmt.format(item.valorUnitario)}</td>
+                                <td className="px-3 py-2 text-right font-medium text-slate-900">{fmt.format(item.valorTotal)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
 
                       {pedido.notasFiscais && pedido.notasFiscais.length > 0 && (
                         <p className="text-xs text-slate-500">
@@ -558,7 +578,7 @@ export function Requests() {
                         </p>
                       )}
 
-                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                      <div className={pedido.status === "CONCLUIDO" ? "grid grid-cols-1 lg:grid-cols-2 gap-4" : ""}>
                         <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
                           <div className="px-3 py-2 bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-600">
                             Linha do tempo
@@ -592,48 +612,46 @@ export function Requests() {
                           </div>
                         </div>
 
-                        <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
-                          <div className="px-3 py-2 bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-600">
-                            Saldos do contrato · {pedido.contrato?.numero}
-                          </div>
-                          <table className="min-w-full text-xs">
-                            <thead className="bg-slate-50 text-left text-slate-500">
-                              <tr>
-                                <th className="px-3 py-1.5 font-medium">Item</th>
-                                <th className="px-3 py-1.5 text-right font-medium">Contr.</th>
-                                <th className="px-3 py-1.5 text-right font-medium">Rec.</th>
-                                <th className="px-3 py-1.5 text-right font-medium">Cons.</th>
-                                <th className="px-3 py-1.5 text-right font-medium">Disp.</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100">
-                              {saldos.map((s) => (
-                                <tr key={s.id}>
-                                  <td className="px-3 py-1.5 text-slate-800 line-clamp-1">{s.descricao}</td>
-                                  <td className="px-3 py-1.5 text-right text-slate-600">{s.quantidade}</td>
-                                  <td className="px-3 py-1.5 text-right text-slate-600">{s.recebido}</td>
-                                  <td className="px-3 py-1.5 text-right text-slate-600">{s.consumido}</td>
-                                  <td className="px-3 py-1.5 text-right text-slate-900 font-medium">{s.recebido - s.consumido}</td>
+                        {pedido.status === "CONCLUIDO" && (
+                          <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
+                            <div className="px-3 py-2 bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-600">
+                              Saldos do contrato · {pedido.contrato?.numero}
+                            </div>
+                            <table className="min-w-full text-xs">
+                              <thead className="bg-slate-50 text-left text-slate-500">
+                                <tr>
+                                  <th className="px-3 py-1.5 font-medium">Item</th>
+                                  <th className="px-3 py-1.5 text-right font-medium">Contr.</th>
+                                  <th className="px-3 py-1.5 text-right font-medium">Rec.</th>
                                 </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-100">
+                                {saldos.filter((s) => idItensPedido.has(s.id)).map((s) => (
+                                  <tr key={s.id}>
+                                    <td className="px-3 py-1.5 text-slate-800 line-clamp-1">{s.descricao}</td>
+                                    <td className="px-3 py-1.5 text-right text-slate-600">{s.quantidade}</td>
+                                    <td className="px-3 py-1.5 text-right text-slate-900 font-medium">{recebidoPorItem.get(s.id) ?? 0}</td>
+                                  </tr>
+                                ))}
+                                {saldos.filter((s) => idItensPedido.has(s.id)).length === 0 && (
+                                  <tr><td colSpan={3} className="px-3 py-3 text-center text-slate-400">Sem dados.</td></tr>
+                                )}
+                              </tbody>
+                            </table>
+                            <div className="px-3 py-2 border-t border-slate-100 max-h-40 overflow-auto">
+                              {movsPedido.map((m) => (
+                                <p key={m.id} className="text-[11px] text-slate-500">
+                                  <span className={`font-medium ${m.tipo === "ENTRADA" ? "text-emerald-600" : "text-orange-600"}`}>
+                                    {m.tipo === "ENTRADA" ? "Entrada" : "Baixa"}
+                                  </span>{" "}
+                                  · {m.itemLicitado?.descricao} · {m.quantidade} {m.itemLicitado?.unidade}
+                                  {m.notaFiscal ? ` · NF ${m.notaFiscal.numeroNota}` : ""} · {format(parseISO(m.data), "dd/MM/yyyy")}
+                                </p>
                               ))}
-                              {saldos.length === 0 && (
-                                <tr><td colSpan={5} className="px-3 py-3 text-center text-slate-400">Sem dados.</td></tr>
-                              )}
-                            </tbody>
-                          </table>
-                          <div className="px-3 py-2 border-t border-slate-100 max-h-40 overflow-auto">
-                            {movs.map((m) => (
-                              <p key={m.id} className="text-[11px] text-slate-500">
-                                <span className={`font-medium ${m.tipo === "ENTRADA" ? "text-emerald-600" : "text-orange-600"}`}>
-                                  {m.tipo === "ENTRADA" ? "Entrada" : "Baixa"}
-                                </span>{" "}
-                                · {m.itemLicitado?.descricao} · {m.quantidade} {m.itemLicitado?.unidade}
-                                {m.notaFiscal ? ` · NF ${m.notaFiscal.numeroNota}` : ""} · {format(parseISO(m.data), "dd/MM/yyyy")}
-                              </p>
-                            ))}
-                            {movs.length === 0 && <p className="text-[11px] text-slate-400 text-center py-1">Sem movimentações.</p>}
+                              {movsPedido.length === 0 && <p className="text-[11px] text-slate-400 text-center py-1">Sem movimentações.</p>}
+                            </div>
                           </div>
-                        </div>
+                        )}
                       </div>
                     </div>
                   )}
@@ -670,14 +688,9 @@ export function Requests() {
             <div className="px-6 py-5 space-y-4">
               {novoStatus === "CONFIRMADO" && (
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Número da Ordem de Compra <span className="text-red-500">*</span></label>
-                  <input
-                    type="text"
-                    value={numeroOrdem}
-                    onChange={(e) => setNumeroOrdem(e.target.value)}
-                    placeholder="Ex.: OC-2026-0001"
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
+                  <p className="text-sm text-slate-600">
+                    A <strong>Ordem de Compra</strong> será gerada automaticamente (<span className="font-mono">OC-&lt;sigla&gt;-&lt;seq&gt;</span>) ao confirmar a compra.
+                  </p>
                 </div>
               )}
               {["ENTREGUE", "CONFERENCIA", "CONCLUIDO", "DEVOLVIDO"].includes(novoStatus) && (
@@ -705,9 +718,24 @@ export function Requests() {
                 </p>
               )}
               {novoStatus === "CONCLUIDO" && (
-                <p className="text-sm text-slate-600">
-                  Ao concluir, as quantidades do pedido serão <strong>descontadas automaticamente</strong> do saldo do contrato.
-                </p>
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      CPF do fiscal <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={cpfStatus}
+                      onChange={(e) => setCpfStatus(e.target.value)}
+                      placeholder="000.000.000-00"
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <p className="text-sm text-slate-600">
+                    Ao concluir, as quantidades do pedido serão <strong>descontadas automaticamente</strong> do saldo do contrato e o{" "}
+                    <strong>Termo de Recebimento</strong> será gerado com o CPF acima.
+                  </p>
+                </>
               )}
               {!["CONFIRMADO", "DEVOLVIDO", "CANCELADO", "CONCLUIDO"].includes(novoStatus) && (
                 <p className="text-sm text-slate-600">
@@ -724,7 +752,7 @@ export function Requests() {
               </button>
               <button
                 onClick={confirmarStatus}
-                disabled={novoStatus === "CONFIRMADO" && !numeroOrdem.trim()}
+                disabled={(novoStatus === "CONCLUIDO" && cpfStatus.replace(/\D/g, "").length !== 11) || criando}
                 className="flex items-center gap-2 px-5 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-40 rounded-xl"
               >
                 {criando && <Loader2 className="w-4 h-4 animate-spin" />}
@@ -788,49 +816,24 @@ export function Requests() {
         </div>
       )}
 
-      {isTermoOpen && termoPedido && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
-              <h3 className="text-lg font-bold text-slate-900">Termo de Recebimento — {termoPedido.numeroPedido}</h3>
-              <button onClick={() => setIsTermoOpen(false)} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="px-6 py-5 space-y-4">
-              <p className="text-sm text-slate-600">
-                Gera o documento <strong>Termo de Recebimento de Produtos</strong> no padrão do ofício da prefeitura, assinado pelo fiscal logado.
-              </p>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  CPF do fiscal <span className="text-slate-400">(opcional)</span>
-                </label>
-                <input
-                  type="text"
-                  value={termoCpf}
-                  onChange={(e) => setTermoCpf(e.target.value)}
-                  placeholder="xxx.xxx.xxx-xx"
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                <p className="text-xs text-slate-400 mt-1">Se não informado, usa o placeholder do modelo.</p>
+      {obsAberto !== null && (() => {
+        const obs = pedidos.find((p) => p.id === obsAberto)?.observacao;
+        return (
+          <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setObsAberto(null)}>
+            <div className="w-full max-w-lg bg-white rounded-2xl shadow-2xl" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+                <h3 className="text-lg font-bold text-slate-900">Observação do Pedido</h3>
+                <button onClick={() => setObsAberto(null)} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="px-6 py-5">
+                <p className="text-sm text-slate-700 whitespace-pre-wrap">{obs || "Sem observação."}</p>
               </div>
             </div>
-            <div className="px-6 py-4 border-t border-slate-200 flex justify-end gap-3">
-              <button onClick={() => setIsTermoOpen(false)} className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-xl">
-                Cancelar
-              </button>
-              <button
-                onClick={gerarTermo}
-                disabled={gerandoTermo}
-                className="flex items-center gap-2 px-5 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-40 rounded-xl"
-              >
-                {gerandoTermo ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileDown className="w-4 h-4" />}
-                Gerar e Baixar
-              </button>
-            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }
@@ -995,14 +998,12 @@ function RegistrarNotaModal({
   const [numeroNota, setNumeroNota] = useState("");
   const [dataEmissao, setDataEmissao] = useState("");
   const [fornecedorExtraido, setFornecedorExtraido] = useState("");
-  const [quantidades, setQuantidades] = useState<Record<number, string>>({});
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
 
   const selecionados = pedido.itens
-    .map((item) => ({ item, quantidade: Number(quantidades[item.idItemLicitado]) || 0 }))
-    .filter((s) => s.quantidade > 0);
+    .map((item) => ({ idItemLicitado: item.idItemLicitado, quantidade: item.quantidade }));
 
   const valido = numeroNota.trim() && dataEmissao && selecionados.length > 0;
 
@@ -1060,7 +1061,7 @@ function RegistrarNotaModal({
         idPedido: pedido.id,
         numeroNota: numeroNota.trim(),
         dataEmissao,
-        itens: selecionados.map((s) => ({ idItemLicitado: s.item.idItemLicitado, quantidade: s.quantidade })),
+        itens: selecionados,
       });
     } finally {
       setSalvando(false);
@@ -1135,17 +1136,10 @@ function RegistrarNotaModal({
                 <div key={item.id} className="px-4 py-3 flex items-center gap-3">
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-slate-900">{item.itemLicitado?.descricao}</p>
-                    <p className="text-xs text-slate-500">Qtd pedida: {item.quantidade} {item.itemLicitado?.unidade}</p>
                   </div>
-                  <input
-                    type="number"
-                    min="0"
-                    max={item.quantidade}
-                    placeholder="0"
-                    value={quantidades[item.idItemLicitado] ?? ""}
-                    onChange={(e) => setQuantidades((q) => ({ ...q, [item.idItemLicitado]: e.target.value }))}
-                    className="w-28 px-3 py-2 border border-slate-300 rounded-lg text-sm text-right focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
+                  <span className="px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-sm font-medium text-slate-900">
+                    {item.quantidade} {item.itemLicitado?.unidade}
+                  </span>
                 </div>
               ))}
             </div>

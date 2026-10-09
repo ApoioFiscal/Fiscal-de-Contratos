@@ -109,6 +109,8 @@ export interface Pedido {
   numeroOrdem: string | null;
   dataOrdem: string | null;
   observacao: string | null;
+  arquivoTermo: string | null;
+  dataGeracaoTermo: string | null;
   idContrato: number;
   itens: PedidoItem[];
   contrato?: Pick<Licitacao, "id" | "numero" | "numeroProcesso" | "objeto" | "fornecedor" | "cnpjFornecedor">;

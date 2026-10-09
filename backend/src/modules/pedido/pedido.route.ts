@@ -68,7 +68,7 @@ pedidoRouter.post(
   asyncHandler((req, res) => controller.registrarAviso(req, res))
 );
 
-// Termo de Recebimento de Produtos (DOCX gerado sob demanda)
+// Termo de Recebimento de Produtos (arquivo salvo na conclusão do pedido)
 pedidoRouter.get(
   "/:id/termo",
   autenticationMiddleware,

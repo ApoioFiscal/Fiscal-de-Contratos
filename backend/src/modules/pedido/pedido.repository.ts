@@ -101,6 +101,12 @@ export class PedidoRepository {
     return prisma.pedido.count();
   }
 
+  async countOrdensPorSetor(idSetor: number): Promise<number> {
+    return prisma.pedido.count({
+      where: { idSetorCriador: idSetor, numeroOrdem: { not: null } },
+    });
+  }
+
   async create(data: CriarPedidoData, itens: PedidoItemEntrada[], numeroPedido: string) {
     const valorTotal = itens.reduce((sum, item) => sum + item.valorUnitario * item.quantidade, 0);
 
@@ -154,7 +160,13 @@ export class PedidoRepository {
     });
   }
 
-  async updateStatus(id: number, status: StatusPedido, input: AtualizarStatusPedidoInput, idUsuario: number) {
+  async updateStatus(
+    id: number,
+    status: StatusPedido,
+    input: AtualizarStatusPedidoInput,
+    idUsuario: number,
+    arquivoTermo?: string
+  ) {
     return prisma.$transaction(async (tx) => {
       const pedido = await tx.pedido.findUnique({
         where: { id },
@@ -172,6 +184,11 @@ export class PedidoRepository {
       if (status === StatusPedido.CONFIRMADO) {
         data.numeroOrdem = input.numeroOrdem ?? null;
         data.dataOrdem = new Date();
+      }
+
+      if (status === StatusPedido.CONCLUIDO && arquivoTermo) {
+        data.arquivoTermo = arquivoTermo;
+        data.dataGeracaoTermo = new Date();
       }
 
       const atualizado = await tx.pedido.update({ where: { id }, data });

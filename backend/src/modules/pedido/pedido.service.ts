@@ -1,13 +1,18 @@
 import { StatusPedido } from "@prisma/client";
+import path from "path";
+import { existsSync, promises as fs } from "fs";
 import { PedidoRepository } from "./pedido.repository";
 import { CreatePedidoInput, AtualizarStatusPedidoInput } from "../../common/schemas";
 import { ForbiddenError, NotFoundError, ValidationError } from "../../common/errors";
 import { GeradorTermoRecebimentoDocx } from "./geradorTermoRecebimento";
 
+const TERMOS_DIR = path.join(process.cwd(), "uploads", "termos");
+
 interface UsuarioAutenticado {
   id: number;
   idSetor?: number;
   isAdmin?: boolean;
+  nome?: string;
 }
 
 // Transições de status permitidas no ciclo do pedido.
@@ -33,6 +38,20 @@ export class PedidoService {
   private gerarNumeroPedido(quantidade: number): string {
     const proximo = quantidade + 1;
     return `REQ-${String(proximo).padStart(3, "0")}`;
+  }
+
+  private normalizarSigla(sigla?: string | null): string {
+    const normalizada = (sigla ?? "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toUpperCase()
+      .replace(/[^A-Z0-9-]/g, "");
+    return normalizada || "SEC";
+  }
+
+  private gerarNumeroOrdem(pedido: { idSetorCriador: number; setor: { sigla: string } | null }, seq: number): string {
+    const sigla = this.normalizarSigla(pedido.setor?.sigla);
+    return `OC-${sigla}-${String(seq).padStart(3, "0")}`;
   }
 
   private validarBeneficiaria(contrato: { setores: { idSetor: number }[] }, user: UsuarioAutenticado) {
@@ -138,11 +157,38 @@ export class PedidoService {
       );
     }
 
-    if (input.status === StatusPedido.CONFIRMADO && !input.numeroOrdem) {
-      throw new ValidationError("Informe o número da ordem de compra");
+    let dados = { ...input };
+    let arquivoTermo: string | undefined;
+
+    if (input.status === StatusPedido.CONFIRMADO) {
+      const totalOrdens = await this.repository.countOrdensPorSetor(pedido.idSetorCriador);
+      dados = { ...dados, numeroOrdem: this.gerarNumeroOrdem(pedido, totalOrdens + 1) };
     }
 
-    return this.repository.updateStatus(id, input.status, input, user.id);
+    if (input.status === StatusPedido.CONCLUIDO) {
+      const cpf = (input.cpf ?? "").replace(/\D/g, "");
+      if (cpf.length !== 11) {
+        throw new ValidationError("Informe o CPF do fiscal (11 dígitos) para gerar o termo de recebimento");
+      }
+
+      const buffer = await this.geradorTermo.gerar(
+        {
+          numeroPedido: pedido.numeroPedido,
+          contrato: { numero: pedido.contrato.numero },
+          setor: pedido.setor ? { nome: pedido.setor.nome } : null,
+          itens: pedido.itens,
+        },
+        user.nome || "Fiscal de Contratos",
+        cpf
+      );
+
+      const filename = `TERMO-RECEBIMENTO-${pedido.numeroPedido.replace(/[^a-zA-Z0-9-_]/g, "_")}.docx`;
+      await fs.mkdir(TERMOS_DIR, { recursive: true });
+      await fs.writeFile(path.join(TERMOS_DIR, filename), buffer);
+      arquivoTermo = filename;
+    }
+
+    return this.repository.updateStatus(id, input.status, dados, user.id, arquivoTermo);
   }
 
   async registrarAviso(id: number, user: UsuarioAutenticado, mensagem: string) {
@@ -154,24 +200,20 @@ export class PedidoService {
     return this.repository.registrarAviso(id, user.id, mensagem);
   }
 
-  async gerarTermoRecebimento(id: number, fiscalNome: string, fiscalCpf?: string) {
+  async obterArquivoTermo(id: number) {
     const pedido = await this.repository.findById(id);
     if (!pedido) {
       throw new NotFoundError("Pedido");
     }
+    if (!pedido.arquivoTermo) {
+      throw new NotFoundError("Termo de recebimento");
+    }
 
-    const buffer = await this.geradorTermo.gerar(
-      {
-        numeroPedido: pedido.numeroPedido,
-        contrato: { numero: pedido.contrato.numero },
-        setor: pedido.setor ? { nome: pedido.setor.nome } : null,
-        itens: pedido.itens,
-      },
-      fiscalNome,
-      fiscalCpf
-    );
+    const caminho = path.join(TERMOS_DIR, pedido.arquivoTermo);
+    if (!existsSync(caminho)) {
+      throw new NotFoundError("Arquivo do termo de recebimento");
+    }
 
-    const filename = `TERMO-RECEBIMENTO-${pedido.numeroPedido.replace(/[^a-zA-Z0-9-_]/g, "_")}.docx`;
-    return { buffer, filename };
+    return { caminho, filename: pedido.arquivoTermo };
   }
 }

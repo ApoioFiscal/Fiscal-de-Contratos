@@ -203,6 +203,8 @@ model Pedido {
   numeroOrdem        String?
   dataOrdem          DateTime?
   observacao         String?
+  arquivoTermo       String?
+  dataGeracaoTermo   DateTime?
 
   usuario Usuario @relation(fields: [idUsuarioCriador], references: [id])
   setor Setor @relation("SolicitantePedido", fields: [idSetorCriador], references: [id])
