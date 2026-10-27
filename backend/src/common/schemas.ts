@@ -10,8 +10,11 @@ import {
 
 // Schemas para criar novo setor 
 export const CreateSetorSchema = z.object({
-  nome: z.string().min(1, "Nome é obrigatório").trim(),
-  sigla: z.string().min(1, "Sigla é obrigatória").toUpperCase(),
+  nome: z.string().min(1, "Nome e obrigatorio").trim(),
+  sigla: z.string().min(1, "Sigla e obrigatoria").toUpperCase(),
+  responsavel: z.string().optional(),
+  descricao: z.string().optional(),
+  idSetor: z.number().int().positive().optional(),
 });
 
 // Schema para atualizar novo setor, campos não obrigatórios.
@@ -23,9 +26,9 @@ export type UpdateSetorInput = z.infer<typeof UpdateSetorSchema>
 
 // Schemas de criação de um novo Usuario
 export const CreateUsuarioSchema = z.object({
-  nome: z.string().min(1, "Nome é obrigatório").trim(),
-  email: z.string().email("E-mail inválido"),
-  senha: z.string().min(6, "Senha deve ter no mínimo 6 caracteres"),
+  nome: z.string().min(1, "Nome e obrigatorio").trim(),
+  email: z.string().email("E-mail invalido"),
+  senha: z.string().min(6, "Senha deve ter no minimo 6 caracteres"),
   funcao: z.enum([
     FuncaoUsuario.PREFEITO,
     FuncaoUsuario.SECRETARIO,
@@ -33,7 +36,7 @@ export const CreateUsuarioSchema = z.object({
     FuncaoUsuario.FISCAL,
   ]),
   isAdmin: z.boolean().optional().default(false),
-  idSetor: z.number().int().positive("ID do setor deve ser um número positivo"),
+  idSetor: z.number().int().positive("ID do setor deve ser um numero positivo"),
 });
 
 export type CreateUsuarioInput = z.infer<typeof CreateUsuarioSchema>;
@@ -41,7 +44,7 @@ export type CreateUsuarioInput = z.infer<typeof CreateUsuarioSchema>;
 // Validção de ID
 export const IdParamSchema = z.object({
   id: z.string()
-    .regex(/^\d+$/, "ID deve conter apenas números")
+    .regex(/^\d+$/, "ID deve conter apenas numeros")
     .transform((val) => parseInt(val, 10))
     .pipe(z.number().positive("ID deve ser positivo")),
 });
@@ -49,7 +52,7 @@ export const IdParamSchema = z.object({
 export type IdParam = z.infer<typeof IdParamSchema>;
 
 export const UsuarioLoginSchema = z.object({
-  email: z.string().email("Email inválido"),
+  email: z.string().email("Email invalido"),
   senha: z.string().min(6, "Senha deve conter no minimo 6 caracteres")
 })
 
@@ -211,3 +214,21 @@ export const TermoRenovacaoQuerySchema = z.object({
 });
 
 export type TermoRenovacaoQuery = z.infer<typeof TermoRenovacaoQuerySchema>;
+
+export const CreateContratanteSchema=z.object({endereco:z.string().optional(),CNPJ:z.string().optional(),nomePrefeito:z.string().optional(),cpfPrefeito:z.number().int().optional(),carteiraIdentidade:z.string().optional(),idLicitacaoContrato:z.number().int().positive().optional()});
+export type CreateContratanteInput=z.infer<typeof CreateContratanteSchema>;
+export const UpdateContratanteSchema=CreateContratanteSchema.partial();
+export type UpdateContratanteInput=z.infer<typeof UpdateContratanteSchema>;
+
+
+
+export const CreateSolicitacaoSchema=z.object({idUsuario:z.number().int().positive('Usuario invalido'),idItemLicitado:z.number().int().positive('Item invalido'),dataSolicitacao:z.coerce.date().optional(),quantPedida:z.number().int().positive('Quantidade deve ser positiva')});
+export type CreateSolicitacaoInput=z.infer<typeof CreateSolicitacaoSchema>;
+export const UpdateSolicitacaoSchema=CreateSolicitacaoSchema.partial();
+export type UpdateSolicitacaoInput=z.infer<typeof UpdateSolicitacaoSchema>;
+
+
+export const CreateContratadoSchema=z.object({nome:z.string().optional(),endereco:z.string().optional(),CNPJ:z.string().optional(),idLicitacaoContrato:z.number().int().positive().optional()});
+export type CreateContratadoInput=z.infer<typeof CreateContratadoSchema>;
+export const UpdateContratadoSchema=CreateContratadoSchema.partial();
+export type UpdateContratadoInput=z.infer<typeof UpdateContratadoSchema>;
