@@ -6,12 +6,16 @@ import {
   StatusPedido,
   StatusTermoRenovacao,
   TipoRenovacao,
+  TipoSetor,
 } from "@prisma/client";
+
+const TIPO_SETOR_VALUES = Object.values(TipoSetor) as [TipoSetor, ...TipoSetor[]];
 
 // Schemas para criar novo setor 
 export const CreateSetorSchema = z.object({
   nome: z.string().min(1, "Nome e obrigatorio").trim(),
   sigla: z.string().min(1, "Sigla e obrigatoria").toUpperCase(),
+  tipo: z.enum(TIPO_SETOR_VALUES).optional(),
   responsavel: z.string().optional(),
   descricao: z.string().optional(),
   idSetor: z.number().int().positive().optional(),
@@ -139,6 +143,7 @@ export const NotaFiscalItemSchema = z.object({
   idItemLicitado: z.number().int().positive("Item inválido"),
   quantidade: z.number().int().positive("Quantidade da nota deve ser positiva"),
   valorUnitario: z.number().positive("Valor unitário inválido").optional(),
+  marcaConferida: z.boolean().optional(),
 });
 
 export type NotaFiscalItemInput = z.infer<typeof NotaFiscalItemSchema>;

@@ -16,6 +16,7 @@ const LEGACY_ROLE_KEY = "userRole";
 
 const SIGLAS_LICITACOES = new Set(["LIC", "CPL", "LICITACAO", "LICITACOES"]);
 const SIGLAS_CONTRATOS = new Set(["FC", "FCON", "FISCAL", "CONTRATOS", "FISCALIZACAO"]);
+const SIGLAS_COMPRAS = new Set(["CMP", "COMP", "COMPRAS"]);
 
 interface CredenciaisLogin {
   email: string;
@@ -40,7 +41,11 @@ function isSetorResumo(value: unknown): value is SetorResumo {
   return (
     typeof setor.id === "number" &&
     typeof setor.nome === "string" &&
-    typeof setor.sigla === "string"
+    typeof setor.sigla === "string" &&
+    (setor.tipo === undefined ||
+      setor.tipo === "GABINETE" ||
+      setor.tipo === "SETOR" ||
+      setor.tipo === "SECRETARIA")
   );
 }
 
@@ -75,6 +80,10 @@ export function inferirPerfil(payload: JwtPayloadAutenticado): PerfilAcesso {
 
   if (payload.funcao === "SECRETARIO" && SIGLAS_CONTRATOS.has(siglaSetor)) {
     return "contratos";
+  }
+
+  if (payload.funcao === "SECRETARIO" && SIGLAS_COMPRAS.has(siglaSetor)) {
+    return "compras";
   }
 
   if (payload.funcao === "FISCAL") {

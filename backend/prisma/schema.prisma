@@ -10,6 +10,7 @@ model Setor {
   id                         Int              @id @default(autoincrement())
   nome                       String
   sigla                      String           @unique
+  tipo                       TipoSetor        @default(SECRETARIA)
   responsavel                String?
   descricao                  String?
   idSetor                    Int?
@@ -193,6 +194,8 @@ model NotaFiscalItem {
   idItemLicitado Int
   quantidade     Int
   valorUnitario  Float
+  // Conferência do fiscal de contratos no ato do recebimento
+  marcaConferida Boolean      @default(false)
   itemLicitado   ItemLicitado @relation(fields: [idItemLicitado], references: [id])
   notaFiscal     NotaFiscal   @relation(fields: [idNotaFiscal], references: [id])
 
@@ -316,6 +319,14 @@ enum FuncaoUsuario {
   SECRETARIO
   SERVIDOR
   FISCAL
+}
+
+// Natureza do setor: unidade de governo (secretaria), setor administrativo
+// (licitações, compras, fiscalização) ou o gabinete do prefeito.
+enum TipoSetor {
+  GABINETE
+  SETOR
+  SECRETARIA
 }
 
 enum StatusContrato {

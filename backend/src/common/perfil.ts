@@ -3,8 +3,15 @@ import { ForbiddenError } from "./errors";
 
 const SIGLAS_LICITACOES = new Set(["LIC", "CPL", "LICITACAO", "LICITACOES"]);
 const SIGLAS_CONTRATOS = new Set(["FC", "FCON", "FISCAL", "CONTRATOS", "FISCALIZACAO"]);
+const SIGLAS_COMPRAS = new Set(["CMP", "COMP", "COMPRAS"]);
 
-export type PerfilAcesso = "gabinete" | "licitacoes" | "contratos" | "secretaria" | "fiscal";
+export type PerfilAcesso =
+  | "gabinete"
+  | "licitacoes"
+  | "contratos"
+  | "secretaria"
+  | "fiscal"
+  | "compras";
 
 function normalizarSigla(sigla?: string): string {
   return sigla?.trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase() || "";
@@ -27,6 +34,10 @@ export function obterPerfil(user: Request["user"]): PerfilAcesso {
 
   if (user.funcao === "SECRETARIO" && SIGLAS_CONTRATOS.has(siglaSetor)) {
     return "contratos";
+  }
+
+  if (user.funcao === "SECRETARIO" && SIGLAS_COMPRAS.has(siglaSetor)) {
+    return "compras";
   }
 
   if (user.funcao === "FISCAL") {

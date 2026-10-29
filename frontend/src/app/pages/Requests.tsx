@@ -5,6 +5,7 @@ import {
   criarPedido,
   atualizarStatusPedido,
   baixarTermoRecebimento,
+  registrarAvisoPedido,
   type CriarPedidoPayload,
 } from "@/services/pedidos";
 import { registrarEntradaNota, resumoContrato, listarMovimentacoes } from "@/services/estoque";
@@ -68,7 +69,10 @@ const STATUS_TERMINAL: StatusPedido[] = ["CONCLUIDO", "DEVOLVIDO", "CANCELADO"];
 export function Requests() {
   const sessao = obterSessao();
   const perfil = sessao?.perfil || "secretaria";
-  const podeOperar = perfil === "contratos" || perfil === "fiscal";
+  // Compras conduz o pedido até a chegada; o FCON apenas confere e conclui.
+  const podeExecutar = perfil === "compras";
+  const podeConferir = perfil === "contratos" || perfil === "fiscal";
+  const podeOperar = podeExecutar || podeConferir;
   const podeCriar = perfil === "secretaria" || perfil === "gabinete" || perfil === "licitacoes";
 
   const [searchTerm, setSearchTerm] = useState("");
@@ -89,11 +93,16 @@ export function Requests() {
 
   const [isStatusOpen, setIsStatusOpen] = useState(false);
   const [statusPedido, setStatusPedido] = useState<Pedido | null>(null);
-  const [novoStatus, setNovoStatus] = useState<StatusPedido>("CONFIRMADO");
-  const [cpfStatus, setCpfStatus] = useState("");
+  const [novoStatus, setNovoStatus] = useState<StatusPedido>("DEVOLVIDO");
 
-  const [isEntregaOpen, setIsEntregaOpen] = useState(false);
-  const [entregaPedido, setEntregaPedido] = useState<Pedido | null>(null);
+  const [isChegadaOpen, setIsChegadaOpen] = useState(false);
+  const [chegadaPedido, setChegadaPedido] = useState<Pedido | null>(null);
+
+  const [isConferirOpen, setIsConferirOpen] = useState(false);
+  const [conferirPedido, setConferirPedido] = useState<Pedido | null>(null);
+
+  const [isAvisoOpen, setIsAvisoOpen] = useState(false);
+  const [avisoPedido, setAvisoPedido] = useState<Pedido | null>(null);
 
   const [obsAberto, setObsAberto] = useState<number | null>(null);
 
@@ -196,7 +205,6 @@ export function Requests() {
   const abrirStatus = (pedido: Pedido, status: StatusPedido) => {
     setStatusPedido(pedido);
     setNovoStatus(status);
-    setCpfStatus("");
     setIsStatusOpen(true);
   };
 
@@ -205,10 +213,7 @@ export function Requests() {
     setCriando(true);
     setError(null);
     try {
-      await atualizarStatusPedido(statusPedido.id, {
-        status: novoStatus,
-        cpf: novoStatus === "CONCLUIDO" ? cpfStatus.trim() : undefined,
-      });
+      await atualizarStatusPedido(statusPedido.id, { status: novoStatus });
       setIsStatusOpen(false);
       setStatusPedido(null);
       reload();
@@ -217,11 +222,6 @@ export function Requests() {
     } finally {
       setCriando(false);
     }
-  };
-
-  const abrirEntrega = (pedido: Pedido) => {
-    setEntregaPedido(pedido);
-    setIsEntregaOpen(true);
   };
 
   const baixarTermo = async (pedido: Pedido) => {
@@ -233,36 +233,80 @@ export function Requests() {
     }
   };
 
-  const acoesPorStatus = (pedido: Pedido): { kind: "status" | "entrega" | "termo"; status?: StatusPedido; label: string; icon: typeof Clock; cor: string }[] => {
-    if (!podeOperar) return [];
-    const btn = (label: string, icon: typeof Clock, cor: string, kind: "status" | "entrega" | "termo", status?: StatusPedido) => ({ kind, status, label, icon, cor });
-    switch (pedido.status) {
-      case "PENDENTE":
-        return [
-          btn("Registrar Compra", ShoppingCart, "bg-blue-50 text-blue-700 hover:bg-blue-100 border-blue-200", "status", "CONFIRMADO"),
-          btn("Cancelar", Ban, "bg-slate-50 text-slate-600 hover:bg-slate-100 border-slate-200", "status", "CANCELADO"),
-        ];
-      case "CONFIRMADO":
-        return [
-          btn("Compra Efetuada", ShoppingCart, "bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border-emerald-200", "status", "EFETUADO"),
-        ];
-      case "EFETUADO":
-        return [
-          btn("Registrar Entrega", ClipboardCheck, "bg-cyan-50 text-cyan-700 hover:bg-cyan-100 border-cyan-200", "entrega"),
-        ];
-      case "ENTREGUE":
-        return [
-          btn("Concluir Pedido", CheckCircle, "bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border-emerald-200", "status", "CONCLUIDO"),
-          btn("Devolver", RotateCcw, "bg-orange-50 text-orange-700 hover:bg-orange-100 border-orange-200", "status", "DEVOLVIDO"),
-          btn("Cancelar", Ban, "bg-slate-50 text-slate-600 hover:bg-slate-100 border-slate-200", "status", "CANCELADO"),
-        ];
-      case "CONCLUIDO":
-        return [
-          btn("Termo de Recebimento", FileDown, "bg-slate-50 text-slate-700 hover:bg-slate-100 border-slate-300", "termo"),
-        ];
-      default:
-        return [];
+  type AcaoPedido = {
+    kind: "status" | "chegada" | "conferir" | "termo" | "aviso";
+    status?: StatusPedido;
+    label: string;
+    icon: typeof Clock;
+    cor: string;
+  };
+
+  const acoesPorStatus = (pedido: Pedido): AcaoPedido[] => {
+    const btn = (
+      label: string,
+      icon: typeof Clock,
+      cor: string,
+      kind: AcaoPedido["kind"],
+      status?: StatusPedido
+    ): AcaoPedido => ({ kind, status, label, icon, cor });
+
+    const termo = btn(
+      "Termo de Recebimento",
+      FileDown,
+      "bg-slate-50 text-slate-700 hover:bg-slate-100 border-slate-300",
+      "termo"
+    );
+
+    if (podeExecutar) {
+      switch (pedido.status) {
+        case "PENDENTE":
+          return [
+            btn("Registrar Compra", ShoppingCart, "bg-blue-50 text-blue-700 hover:bg-blue-100 border-blue-200", "status", "CONFIRMADO"),
+            btn("Cancelar", Ban, "bg-slate-50 text-slate-600 hover:bg-slate-100 border-slate-200", "status", "CANCELADO"),
+          ];
+        case "CONFIRMADO":
+          return [
+            btn("Compra Efetuada", ShoppingCart, "bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border-emerald-200", "status", "EFETUADO"),
+          ];
+        case "EFETUADO":
+          return [
+            btn("Informar Chegada", Truck, "bg-cyan-50 text-cyan-700 hover:bg-cyan-100 border-cyan-200", "chegada"),
+          ];
+        case "CONCLUIDO":
+          return pedido.arquivoTermo ? [termo] : [];
+        default:
+          return [];
+      }
     }
+
+    if (podeConferir) {
+      const aviso = btn(
+        "Registrar Aviso",
+        MessageSquareWarning,
+        "bg-rose-50 text-rose-700 hover:bg-rose-100 border-rose-200",
+        "aviso"
+      );
+
+      switch (pedido.status) {
+        case "PENDENTE":
+        case "CONFIRMADO":
+        case "EFETUADO":
+          return [aviso];
+        case "ENTREGUE":
+          return [
+            btn("Conferir e Concluir", ClipboardCheck, "bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border-emerald-200", "conferir"),
+            aviso,
+            btn("Devolver", RotateCcw, "bg-orange-50 text-orange-700 hover:bg-orange-100 border-orange-200", "status", "DEVOLVIDO"),
+            btn("Cancelar", Ban, "bg-slate-50 text-slate-600 hover:bg-slate-100 border-slate-200", "status", "CANCELADO"),
+          ];
+        case "CONCLUIDO":
+          return [termo];
+        default:
+          return [];
+      }
+    }
+
+    return [];
   };
 
   const transicionarDireto = async (pedido: Pedido, status: StatusPedido) => {
@@ -278,15 +322,23 @@ export function Requests() {
     }
   };
 
-  const handleAcao = (pedido: Pedido, acao: (typeof acoesPorStatus)[0]) => {
+  const handleAcao = (pedido: Pedido, acao: AcaoPedido) => {
     if (acao.kind === "status" && acao.status) {
       if (acao.status === "CONFIRMADO" || acao.status === "EFETUADO") {
         transicionarDireto(pedido, acao.status);
       } else {
         abrirStatus(pedido, acao.status);
       }
-    } else if (acao.kind === "entrega") abrirEntrega(pedido);
-    else if (acao.kind === "termo") baixarTermo(pedido);
+    } else if (acao.kind === "chegada") {
+      setChegadaPedido(pedido);
+      setIsChegadaOpen(true);
+    } else if (acao.kind === "conferir") {
+      setConferirPedido(pedido);
+      setIsConferirOpen(true);
+    } else if (acao.kind === "aviso") {
+      setAvisoPedido(pedido);
+      setIsAvisoOpen(true);
+    } else if (acao.kind === "termo") baixarTermo(pedido);
   };
 
   return (
@@ -295,9 +347,11 @@ export function Requests() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Pedidos e Ordens de Compra</h1>
           <p className="text-sm text-slate-500 mt-1">
-            {podeOperar
-              ? "Fila de solicitações: acompanhe compra, entrega e conclusão."
-              : "Solicitações do seu setor, prazos e avisos da Fiscalização."}
+            {podeExecutar
+              ? "Fila de compras: registre a compra, efetive e informe a chegada dos itens."
+              : podeConferir
+                ? "Conferência final: lance a nota fiscal, confira quantidades e marcas e conclua o pedido."
+                : "Solicitações do seu setor, prazos e avisos da Fiscalização."}
           </p>
         </div>
         {podeCriar && (
@@ -447,10 +501,12 @@ export function Requests() {
                     </div>
                   </div>
 
-                  {!podeOperar && pedido.historico?.some((h) => h.tipo === "AVISO") && (
+                  {!podeConferir && pedido.historico?.some((h) => h.tipo === "AVISO") && (
                     <div className="mt-2 flex items-center gap-2 text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-3 py-1.5">
                       <MessageSquareWarning className="w-4 h-4 shrink-0" />
-                      Há avisos da Fiscalização neste pedido — confira a timeline.
+                      {podeExecutar
+                        ? "A Fiscalização registrou um aviso/divergência — verifique a timeline e contate o fornecedor."
+                        : "Há avisos da Fiscalização neste pedido — confira a timeline."}
                     </div>
                   )}
 
@@ -665,55 +721,28 @@ export function Requests() {
           <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl">
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
               <h3 className="text-lg font-bold text-slate-900">
-                {novoStatus === "CONCLUIDO"
-                  ? "Concluir Pedido"
-                  : novoStatus === "DEVOLVIDO"
-                    ? "Devolver Pedido"
-                    : "Cancelar Pedido"} — {statusPedido.numeroPedido}
+                {novoStatus === "DEVOLVIDO" ? "Devolver Pedido" : "Cancelar Pedido"} — {statusPedido.numeroPedido}
               </h3>
               <button onClick={() => setIsStatusOpen(false)} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100">
                 <X className="w-5 h-5" />
               </button>
             </div>
             <div className="px-6 py-5 space-y-4">
-              {(novoStatus === "DEVOLVIDO" || novoStatus === "CANCELADO") && (
-                <p className="text-sm text-slate-600">
-                  O pedido <strong>{statusPedido.numeroPedido}</strong> será marcado como{" "}
-                  <strong>{STATUS_PEDIDO_LABEL[novoStatus]}</strong>. Confirma?
-                </p>
-              )}
-              {novoStatus === "CONCLUIDO" && (
-                <>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">
-                      CPF do fiscal <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      value={cpfStatus}
-                      onChange={(e) => setCpfStatus(mascaraCpf(e.target.value))}
-                      placeholder="000.000.000-00"
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                  <p className="text-sm text-slate-600">
-                    Ao concluir, o <strong>Termo de Recebimento</strong> será gerado com o CPF acima e o
-                    pedido sairá da fila do FCON.
-                  </p>
-                </>
-              )}
+              <p className="text-sm text-slate-600">
+                O pedido <strong>{statusPedido.numeroPedido}</strong> será marcado como{" "}
+                <strong>{STATUS_PEDIDO_LABEL[novoStatus]}</strong>. Confirma?
+              </p>
             </div>
             <div className="px-6 py-4 border-t border-slate-200 flex justify-end gap-3">
               <button
                 onClick={() => setIsStatusOpen(false)}
                 className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-xl"
               >
-                Cancelar
+                Voltar
               </button>
               <button
                 onClick={confirmarStatus}
-                disabled={(novoStatus === "CONCLUIDO" && cpfStatus.replace(/\D/g, "").length !== 11) || criando}
+                disabled={criando}
                 className="flex items-center gap-2 px-5 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-40 rounded-xl"
               >
                 {criando && <Loader2 className="w-4 h-4 animate-spin" />}
@@ -724,29 +753,90 @@ export function Requests() {
         </div>
       )}
 
-      {isEntregaOpen && entregaPedido && (
-        <ConfirmarEntregaModal
-          pedido={entregaPedido}
+      {isChegadaOpen && chegadaPedido && (
+        <InformarChegadaModal
+          pedido={chegadaPedido}
           carregando={criando}
-          onCancel={() => setIsEntregaOpen(false)}
-          onSalvar={async (payload) => {
+          onCancel={() => {
+            setIsChegadaOpen(false);
+            setChegadaPedido(null);
+          }}
+          onConfirmar={async (observacao) => {
+            setCriando(true);
+            setError(null);
+            try {
+              await atualizarStatusPedido(chegadaPedido.id, {
+                status: "ENTREGUE",
+                observacao: observacao.trim() || undefined,
+              });
+              setIsChegadaOpen(false);
+              setChegadaPedido(null);
+              reload();
+            } catch (err) {
+              setError(err instanceof Error ? err.message : "Erro ao informar a chegada.");
+            } finally {
+              setCriando(false);
+            }
+          }}
+        />
+      )}
+
+      {isConferirOpen && conferirPedido && (
+        <ConferirConclusaoModal
+          pedido={conferirPedido}
+          carregando={criando}
+          onCancel={() => {
+            setIsConferirOpen(false);
+            setConferirPedido(null);
+          }}
+          onConcluir={async (payload) => {
+            setCriando(true);
+            setError(null);
             try {
               await registrarEntradaNota({
-                idPedido: payload.idPedido,
+                idPedido: conferirPedido.id,
                 numeroNota: payload.numeroNota,
                 dataEmissao: payload.dataEmissao,
                 observacao: payload.observacao,
                 itens: payload.itens,
               });
-              await atualizarStatusPedido(payload.idPedido, {
-                status: "ENTREGUE",
+              await atualizarStatusPedido(conferirPedido.id, {
+                status: "CONCLUIDO",
+                cpf: payload.cpf,
                 observacao: payload.observacao,
               });
-              setIsEntregaOpen(false);
-              setEntregaPedido(null);
+              setIsConferirOpen(false);
+              setConferirPedido(null);
               reload();
             } catch (err) {
-              setError(err instanceof Error ? err.message : "Erro ao registrar a entrega.");
+              setError(err instanceof Error ? err.message : "Erro ao concluir o pedido.");
+            } finally {
+              setCriando(false);
+            }
+          }}
+        />
+      )}
+
+      {isAvisoOpen && avisoPedido && (
+        <RegistrarAvisoModal
+          pedido={avisoPedido}
+          carregando={criando}
+          onCancel={() => {
+            setIsAvisoOpen(false);
+            setAvisoPedido(null);
+          }}
+          onConfirmar={async (mensagem) => {
+            setCriando(true);
+            setError(null);
+            try {
+              await registrarAvisoPedido(avisoPedido.id, mensagem);
+              setIsAvisoOpen(false);
+              setAvisoPedido(null);
+              reload();
+            } catch (err) {
+              setError(err instanceof Error ? err.message : "Erro ao registrar o aviso.");
+            } finally {
+              setCriando(false);
             }
           }}
         />
@@ -770,6 +860,84 @@ export function Requests() {
           </div>
         );
       })()}
+    </div>
+  );
+}
+
+function RegistrarAvisoModal({
+  pedido,
+  carregando,
+  onCancel,
+  onConfirmar,
+}: {
+  pedido: Pedido;
+  carregando: boolean;
+  onCancel: () => void;
+  onConfirmar: (mensagem: string) => Promise<void>;
+}) {
+  const [mensagem, setMensagem] = useState("");
+  const [salvando, setSalvando] = useState(false);
+
+  const valido = mensagem.trim().length >= 3;
+
+  const confirmar = async () => {
+    if (!valido) return;
+    setSalvando(true);
+    try {
+      await onConfirmar(mensagem.trim());
+    } finally {
+      setSalvando(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+      <div className="w-full max-w-lg bg-white rounded-2xl shadow-2xl">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+          <div>
+            <h3 className="text-lg font-bold text-slate-900">Registrar Aviso</h3>
+            <p className="text-xs text-slate-500 mt-1">
+              {pedido.numeroPedido} — o aviso aparece na timeline do pedido e é enviado ao setor
+              solicitante e ao Compras.
+            </p>
+          </div>
+          <button onClick={onCancel} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="px-6 py-5 space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              Aviso / divergência <span className="text-red-500">*</span>
+            </label>
+            <textarea
+              rows={4}
+              value={mensagem}
+              onChange={(e) => setMensagem(e.target.value)}
+              placeholder="Ex.: fornecedor não entregou a quantidade contratada; item com marca divergente do contrato..."
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+            />
+          </div>
+          <p className="text-xs text-slate-500">
+            O Compras fica responsável por contatar o fornecedor e regularizar a situação.
+          </p>
+        </div>
+
+        <div className="px-6 py-4 border-t border-slate-200 flex justify-end gap-3">
+          <button onClick={onCancel} className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-xl">
+            Voltar
+          </button>
+          <button
+            onClick={confirmar}
+            disabled={!valido || salvando || carregando}
+            className="flex items-center gap-2 px-5 py-2 text-sm font-medium text-white bg-rose-600 hover:bg-rose-700 disabled:opacity-40 rounded-xl"
+          >
+            {(salvando || carregando) && <Loader2 className="w-4 h-4 animate-spin" />}
+            Registrar Aviso
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -924,28 +1092,117 @@ function NovoPedidoModal({
   );
 }
 
-function ConfirmarEntregaModal({
+function InformarChegadaModal({
   pedido,
   carregando,
   onCancel,
-  onSalvar,
+  onConfirmar,
 }: {
   pedido: Pedido;
   carregando: boolean;
   onCancel: () => void;
-  onSalvar: (payload: {
-    idPedido: number;
+  onConfirmar: (observacao: string) => Promise<void>;
+}) {
+  const [observacao, setObservacao] = useState("");
+  const [salvando, setSalvando] = useState(false);
+
+  const confirmar = async () => {
+    setSalvando(true);
+    try {
+      await onConfirmar(observacao);
+    } finally {
+      setSalvando(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+      <div className="w-full max-w-lg bg-white rounded-2xl shadow-2xl flex flex-col">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+          <div>
+            <h3 className="text-lg font-bold text-slate-900">Informar Chegada</h3>
+            <p className="text-xs text-slate-500 mt-1">
+              {pedido.numeroPedido} — a mercadoria chegou? A conferência da nota é feita pela Fiscalização.
+            </p>
+          </div>
+          <button onClick={onCancel} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="px-6 py-5 space-y-4">
+          <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3">
+            <p className="text-xs font-semibold text-slate-500 mb-2">Itens do pedido</p>
+            <ul className="space-y-1">
+              {pedido.itens.map((item) => (
+                <li key={item.id} className="text-sm text-slate-800 flex justify-between gap-3">
+                  <span className="truncate">{item.itemLicitado?.descricao}</span>
+                  <span className="text-slate-500 shrink-0">
+                    {item.quantidade} {item.itemLicitado?.unidade}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              Observação da chegada
+            </label>
+            <textarea
+              rows={3}
+              value={observacao}
+              onChange={(e) => setObservacao(e.target.value)}
+              placeholder="Ex.: entregue completo pelo fornecedor; ou faltaram 2 caixas..."
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+            />
+          </div>
+        </div>
+
+        <div className="px-6 py-4 border-t border-slate-200 flex justify-end gap-3">
+          <button onClick={onCancel} className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-xl">
+            Voltar
+          </button>
+          <button
+            onClick={confirmar}
+            disabled={salvando || carregando}
+            className="flex items-center gap-2 px-5 py-2 text-sm font-medium text-white bg-cyan-600 hover:bg-cyan-700 disabled:opacity-40 rounded-xl"
+          >
+            {(salvando || carregando) && <Loader2 className="w-4 h-4 animate-spin" />}
+            Confirmar Chegada
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ConferirConclusaoModal({
+  pedido,
+  carregando,
+  onCancel,
+  onConcluir,
+}: {
+  pedido: Pedido;
+  carregando: boolean;
+  onCancel: () => void;
+  onConcluir: (payload: {
     numeroNota: string;
     dataEmissao: string;
+    cpf: string;
     observacao?: string;
-    itens: { idItemLicitado: number; quantidade: number }[];
+    itens: { idItemLicitado: number; quantidade: number; marcaConferida: boolean }[];
   }) => Promise<void>;
 }) {
   const [numeroNota, setNumeroNota] = useState("");
   const [dataEmissao, setDataEmissao] = useState("");
+  const [cpf, setCpf] = useState("");
   const [fornecedorExtraido, setFornecedorExtraido] = useState("");
   const [quantidades, setQuantidades] = useState<Record<number, string>>(() =>
     Object.fromEntries(pedido.itens.map((i) => [i.idItemLicitado, String(i.quantidade)]))
+  );
+  const [marcasConferidas, setMarcasConferidas] = useState<Record<number, boolean>>(() =>
+    Object.fromEntries(pedido.itens.map((i) => [i.idItemLicitado, false]))
   );
   const [observacao, setObservacao] = useState("");
   const [salvando, setSalvando] = useState(false);
@@ -953,10 +1210,18 @@ function ConfirmarEntregaModal({
   const [uploading, setUploading] = useState(false);
 
   const selecionados = pedido.itens
-    .map((item) => ({ idItemLicitado: item.idItemLicitado, quantidade: Number(quantidades[item.idItemLicitado]) || 0 }))
+    .map((item) => ({
+      idItemLicitado: item.idItemLicitado,
+      quantidade: Number(quantidades[item.idItemLicitado]) || 0,
+      marcaConferida: Boolean(marcasConferidas[item.idItemLicitado]),
+    }))
     .filter((s) => s.quantidade > 0);
 
-  const valido = Boolean(numeroNota.trim()) && Boolean(dataEmissao) && selecionados.length > 0;
+  const podeConcluir =
+    Boolean(numeroNota.trim()) &&
+    Boolean(dataEmissao) &&
+    cpf.replace(/\D/g, "").length === 11 &&
+    selecionados.length > 0;
 
   const handlePdfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -1004,14 +1269,14 @@ function ConfirmarEntregaModal({
     }
   };
 
-  const salvar = async () => {
+  const concluir = async () => {
     setSalvando(true);
     setErro(null);
     try {
-      await onSalvar({
-        idPedido: pedido.id,
+      await onConcluir({
         numeroNota: numeroNota.trim(),
         dataEmissao,
+        cpf: cpf.trim(),
         observacao: observacao.trim() || undefined,
         itens: selecionados,
       });
@@ -1022,12 +1287,12 @@ function ConfirmarEntregaModal({
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-end">
-      <div className="w-full max-w-xl bg-white flex flex-col shadow-2xl animate-in slide-in-from-right duration-300">
+      <div className="w-full max-w-2xl bg-white flex flex-col shadow-2xl animate-in slide-in-from-right duration-300">
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
           <div>
-            <h3 className="text-lg font-bold text-slate-900">Registrar Entrega</h3>
+            <h3 className="text-lg font-bold text-slate-900">Conferência e Conclusão</h3>
             <p className="text-xs text-slate-500 mt-1">
-              {pedido.numeroPedido} — registra a NF e as quantidades recebidas para a conferência.
+              {pedido.numeroPedido} — lance a NF, confira quantidades e marcas e gere o Termo de Recebimento.
             </p>
           </div>
           <button onClick={onCancel} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100">
@@ -1083,15 +1348,30 @@ function ConfirmarEntregaModal({
           <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
             <div className="px-4 py-3 bg-slate-50 border-b border-slate-200 flex items-center gap-2">
               <ReceiptText className="w-4 h-4 text-slate-400" />
-              <p className="text-sm font-semibold text-slate-700">Quantidade Recebida (comparar com o pedido)</p>
+              <p className="text-sm font-semibold text-slate-700">Conferência dos itens</p>
             </div>
             <div className="divide-y divide-slate-100">
               {pedido.itens.map((item) => (
-                <div key={item.id} className="px-4 py-3 flex items-center gap-3">
+                <div key={item.id} className="px-4 py-3 flex flex-wrap items-center gap-3">
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-slate-900">{item.itemLicitado?.descricao}</p>
-                    <p className="text-xs text-slate-500">Qtd pedida: {item.quantidade} {item.itemLicitado?.unidade}</p>
+                    <p className="text-xs text-slate-500">
+                      Qtd pedida: {item.quantidade} {item.itemLicitado?.unidade}
+                      {item.itemLicitado?.marca ? ` · Marca do contrato: ${item.itemLicitado.marca}` : ""}
+                    </p>
                   </div>
+                  <label className="flex items-center gap-2 text-xs text-slate-600">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(marcasConferidas[item.idItemLicitado])}
+                      onChange={(e) =>
+                        setMarcasConferidas((m) => ({ ...m, [item.idItemLicitado]: e.target.checked }))
+                      }
+                      aria-label={`Marca conferida de ${item.itemLicitado?.descricao || item.idItemLicitado}`}
+                      className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                    />
+                    Marca conferida
+                  </label>
                   <input
                     type="number"
                     min="0"
@@ -1100,7 +1380,7 @@ function ConfirmarEntregaModal({
                     onChange={(e) =>
                       setQuantidades((q) => ({ ...q, [item.idItemLicitado]: e.target.value }))
                     }
-                    aria-label={`Quantidade recebida de ${item.itemLicitado?.descricao || item.idItemLicitado}`}
+                    aria-label={`Quantidade conferida de ${item.itemLicitado?.descricao || item.idItemLicitado}`}
                     className="w-24 px-3 py-2 border border-slate-300 rounded-lg text-sm text-right focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                   <span className="w-10 text-sm text-slate-500">{item.itemLicitado?.unidade}</span>
@@ -1111,28 +1391,47 @@ function ConfirmarEntregaModal({
 
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">
-              Observações da entrega
+              CPF do fiscal responsável <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              inputMode="numeric"
+              value={cpf}
+              onChange={(e) => setCpf(mascaraCpf(e.target.value))}
+              placeholder="000.000.000-00"
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              Observações da conferência
             </label>
             <textarea
               rows={3}
               value={observacao}
               onChange={(e) => setObservacao(e.target.value)}
-              placeholder="Ex.: conferido com a nota, itens e quantidades de acordo com o pedido..."
+              placeholder="Ex.: itens e quantidades de acordo com a nota; marca divergente no item X..."
               className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
             />
           </div>
+
+          <p className="text-xs text-slate-500">
+            Ao concluir, a entrada da nota será lançada no Estoque, a baixa será feita pela quantidade
+            conferida e o <strong>Termo de Recebimento</strong> será gerado com o CPF acima.
+          </p>
         </div>
         <div className="px-6 py-4 border-t border-slate-200 flex justify-end gap-3">
           <button onClick={onCancel} className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-xl">
-            Cancelar
+            Voltar
           </button>
           <button
-            onClick={salvar}
-            disabled={!valido || salvando || carregando}
+            onClick={concluir}
+            disabled={!podeConcluir || salvando || carregando}
             className="flex items-center gap-2 px-5 py-2 text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 rounded-xl"
           >
-            {salvando && <Loader2 className="w-4 h-4 animate-spin" />}
-            Registrar Entrega
+            {(salvando || carregando) && <Loader2 className="w-4 h-4 animate-spin" />}
+            Concluir Pedido
           </button>
         </div>
       </div>

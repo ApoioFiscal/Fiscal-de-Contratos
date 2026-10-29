@@ -41,7 +41,9 @@ export function Dashboard() {
   }, [id]);
 
   const podeOperar =
-    sessao?.perfil === "contratos" || sessao?.perfil === "fiscal";
+    sessao?.perfil === "compras" ||
+    sessao?.perfil === "contratos" ||
+    sessao?.perfil === "fiscal";
 
   const podeVerTermos =
     sessao?.perfil === "licitacoes" || sessao?.perfil === "gabinete";

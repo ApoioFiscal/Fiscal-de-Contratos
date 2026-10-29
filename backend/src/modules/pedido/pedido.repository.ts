@@ -46,7 +46,15 @@ const pedidoInclude = {
     select: { id: true, nome: true },
   },
   notasFiscais: {
-    select: { id: true, numeroNota: true, dataEmissao: true, dataEntrada: true },
+    select: {
+      id: true,
+      numeroNota: true,
+      dataEmissao: true,
+      dataEntrada: true,
+      itens: {
+        select: { idItemLicitado: true, quantidade: true, marcaConferida: true },
+      },
+    },
     orderBy: { dataEntrada: "desc" as const },
   },
   historico: {
@@ -171,6 +179,13 @@ export class PedidoRepository {
         where: { id },
         include: {
           itens: { select: { idItemLicitado: true, quantidade: true } },
+          notasFiscais: {
+            select: {
+              itens: { select: { idItemLicitado: true, quantidade: true } },
+            },
+            orderBy: { dataEntrada: "desc" },
+            take: 1,
+          },
         },
       });
 
@@ -221,10 +236,17 @@ export class PedidoRepository {
       }
 
       if (status === StatusPedido.CONCLUIDO) {
+        // Baixa pelo que foi efetivamente conferido na nota fiscal; sem nota,
+        // usa a quantidade pedida.
+        const itensConferidos = pedido.notasFiscais[0]?.itens ?? [];
+
         for (const item of pedido.itens) {
+          const conferido = itensConferidos.find((n) => n.idItemLicitado === item.idItemLicitado);
+          const quantidade = conferido?.quantidade ?? item.quantidade;
+
           await tx.itemLicitado.update({
             where: { id: item.idItemLicitado },
-            data: { consumido: { increment: item.quantidade } },
+            data: { consumido: { increment: quantidade } },
           });
 
           await tx.movimentacaoEstoque.create({
@@ -232,7 +254,7 @@ export class PedidoRepository {
               tipo: TipoMovimentacao.BAIXA,
               idItemLicitado: item.idItemLicitado,
               idPedido: id,
-              quantidade: item.quantidade,
+              quantidade,
               observacao: "Baixa automática na conclusão do pedido",
             },
           });

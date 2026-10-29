@@ -15,13 +15,18 @@ const navItemsPorPerfil: Record<PerfilAcesso, NavItem[]> = {
     { to: "/", icon: LayoutDashboard, label: "Dashboard" },
     { to: "/pedidos", icon: ShoppingCart, label: "Pedidos e Ordens" },
     { to: "/renovacoes", icon: RefreshCcw, label: "Renovacoes" },
-    { to: "/secretarias", icon: Users, label: "Gestao de Secretarias" },
+    { to: "/secretarias", icon: Users, label: "Setores e Secretarias" },
   ],
   licitacoes: [
     { to: "/", icon: LayoutDashboard, label: "Dashboard" },
     { to: "/licitacoes", icon: FileText, label: "Licitacoes & Contratos" },
     { to: "/pedidos", icon: ShoppingCart, label: "Pedidos e Ordens" },
     { to: "/renovacoes", icon: RefreshCcw, label: "Renovacoes" },
+  ],
+  compras: [
+    { to: "/", icon: LayoutDashboard, label: "Dashboard" },
+    { to: "/licitacoes", icon: FileText, label: "Licitacoes & Contratos" },
+    { to: "/pedidos", icon: ShoppingCart, label: "Pedidos e Ordens" },
   ],
   contratos: [
     { to: "/", icon: LayoutDashboard, label: "Dashboard" },
@@ -108,7 +113,7 @@ export function Layout() {
               className="flex items-center gap-2 text-slate-500 hover:text-slate-900 transition-colors text-sm font-medium"
             >
               <ArrowLeft className="w-4 h-4" />
-              Voltar para Gestão de Secretarias
+              Voltar para Setores e Secretarias
             </button>
           ) : (
             <h2 className="text-lg font-semibold text-slate-800">Sistema Integrado de Gestão</h2>

@@ -7,7 +7,7 @@ import { PedidoService } from "./pedido.service";
 import { PedidoRepository } from "./pedido.repository";
 import { GeradorTermoRecebimentoDocx } from "./geradorTermoRecebimento";
 import { normalizarSigla, gerarNumeroOrdem } from "./pedidoUtils";
-import { ValidationError, NotFoundError } from "../../common/errors";
+import { ValidationError, NotFoundError, ForbiddenError } from "../../common/errors";
 
 // ---------------------------------------------------------------------------
 // Fixtures e fakes (sem banco de dados)
@@ -93,7 +93,7 @@ test("CONFIRMADO gera ordem de compra automaticamente (sequencia por setor)", as
   const { repo, chamadas } = criarRepoFake({ pedido: pedidoFixture(StatusPedido.PENDENTE) });
   const service = new PedidoService(repo);
 
-  await service.atualizarStatus(1, { id: 10, nome: "Fiscal" }, { status: StatusPedido.CONFIRMADO });
+  await service.atualizarStatus(1, { id: 10, nome: "Compras", perfil: "compras" }, { status: StatusPedido.CONFIRMADO });
 
   assert.equal(chamadas.countOrdens, 1);
   assert.equal(chamadas.updateStatus.length, 1);
@@ -109,7 +109,7 @@ test("CONFIRMADO respeita o contador de ordens ja emitidas do setor", async () =
   });
   const service = new PedidoService(repo);
 
-  await service.atualizarStatus(1, { id: 10 }, { status: StatusPedido.CONFIRMADO });
+  await service.atualizarStatus(1, { id: 10, perfil: "compras" }, { status: StatusPedido.CONFIRMADO });
 
   assert.equal(chamadas.updateStatus[0].input.numeroOrdem, "OC-SAUDE-008");
 });
@@ -119,7 +119,7 @@ test("transicao invalida de status gera ValidationError", async () => {
   const service = new PedidoService(repo);
 
   await assert.rejects(
-    () => service.atualizarStatus(1, { id: 10 }, { status: StatusPedido.CONCLUIDO }),
+    () => service.atualizarStatus(1, { id: 10, perfil: "compras" }, { status: StatusPedido.CONCLUIDO }),
     (err: unknown) => err instanceof ValidationError && /Transição inválida/.test((err as Error).message)
   );
 });
@@ -128,7 +128,7 @@ test("CONFIRMADO permite marcar compra efetuada (sem numero de ordem manual)", a
   const { repo, chamadas } = criarRepoFake({ pedido: pedidoFixture(StatusPedido.CONFIRMADO) });
   const service = new PedidoService(repo);
 
-  await service.atualizarStatus(1, { id: 10 }, { status: StatusPedido.EFETUADO });
+  await service.atualizarStatus(1, { id: 10, perfil: "compras" }, { status: StatusPedido.EFETUADO });
 
   assert.equal(chamadas.updateStatus.length, 1);
   assert.equal(chamadas.updateStatus[0].status, StatusPedido.EFETUADO);
@@ -141,7 +141,7 @@ test("EFETUADO permite registrar entrega (vai para ENTREGUE) sem gerar termo", a
 
   await service.atualizarStatus(
     1,
-    { id: 10, nome: "Fiscal" },
+    { id: 10, nome: "Compras", perfil: "compras" },
     { status: StatusPedido.ENTREGUE, observacao: "Entrega parcial, faltou 1 caixa" }
   );
 
@@ -156,11 +156,11 @@ test("EFETUADO nao permite concluir direto (CONCLUIDO so a partir de ENTREGUE)",
   const service = new PedidoService(repo);
 
   await assert.rejects(
-    () => service.atualizarStatus(1, { id: 10 }, { status: StatusPedido.CONCLUIDO }),
+    () => service.atualizarStatus(1, { id: 10, perfil: "compras" }, { status: StatusPedido.CONCLUIDO }),
     (err: unknown) => err instanceof ValidationError && /Transição inválida/.test((err as Error).message)
   );
   await assert.rejects(
-    () => service.atualizarStatus(1, { id: 10 }, { status: StatusPedido.DEVOLVIDO }),
+    () => service.atualizarStatus(1, { id: 10, perfil: "compras" }, { status: StatusPedido.DEVOLVIDO }),
     (err: unknown) => err instanceof ValidationError && /Transição inválida/.test((err as Error).message)
   );
 });
@@ -174,7 +174,7 @@ test("ENTREGUE permite concluir (gera termo) com CPF valido", async () => {
   try {
     await service.atualizarStatus(
       1,
-      { id: 10, nome: "Fiscal de Teste" },
+      { id: 10, nome: "Fiscal de Teste", perfil: "fiscal" },
       { status: StatusPedido.CONCLUIDO, cpf: "529.982.247-25" }
     );
 
@@ -190,12 +190,58 @@ test("ENTREGUE permite devolver ou cancelar o pedido", async () => {
   const { repo, chamadas } = criarRepoFake({ pedido: pedidoFixture(StatusPedido.ENTREGUE) });
   const service = new PedidoService(repo);
 
-  await service.atualizarStatus(1, { id: 10 }, { status: StatusPedido.DEVOLVIDO });
-  await service.atualizarStatus(1, { id: 10 }, { status: StatusPedido.CANCELADO });
+  await service.atualizarStatus(1, { id: 10, perfil: "fiscal" }, { status: StatusPedido.DEVOLVIDO });
+  await service.atualizarStatus(1, { id: 10, perfil: "fiscal" }, { status: StatusPedido.CANCELADO });
 
   assert.equal(chamadas.updateStatus.length, 2);
   assert.equal(chamadas.updateStatus[0].status, StatusPedido.DEVOLVIDO);
   assert.equal(chamadas.updateStatus[1].status, StatusPedido.CANCELADO);
+});
+
+// ---------------------------------------------------------------------------
+// Regras por perfil: Compras opera até a chegada; FCON confere e conclui
+// ---------------------------------------------------------------------------
+
+test("compras nao pode concluir o pedido (conferencia e do FCON)", async () => {
+  const { repo, chamadas } = criarRepoFake({ pedido: pedidoFixture(StatusPedido.ENTREGUE) });
+  const service = new PedidoService(repo);
+
+  await assert.rejects(
+    () =>
+      service.atualizarStatus(
+        1,
+        { id: 10, nome: "Compras", perfil: "compras" },
+        { status: StatusPedido.CONCLUIDO, cpf: "529.982.247-25" }
+      ),
+    (err: unknown) => err instanceof ForbiddenError
+  );
+
+  assert.equal(chamadas.updateStatus.length, 0);
+});
+
+test("fiscal nao pode registrar a compra (PENDENTE -> CONFIRMADO)", async () => {
+  const { repo, chamadas } = criarRepoFake({ pedido: pedidoFixture(StatusPedido.PENDENTE) });
+  const service = new PedidoService(repo);
+
+  await assert.rejects(
+    () => service.atualizarStatus(1, { id: 10, perfil: "fiscal" }, { status: StatusPedido.CONFIRMADO }),
+    (err: unknown) => err instanceof ForbiddenError
+  );
+
+  assert.equal(chamadas.updateStatus.length, 0);
+  assert.equal(chamadas.countOrdens, 0);
+});
+
+test("usuario sem perfil reconhecido nao consegue transicionar", async () => {
+  const { repo, chamadas } = criarRepoFake({ pedido: pedidoFixture(StatusPedido.PENDENTE) });
+  const service = new PedidoService(repo);
+
+  await assert.rejects(
+    () => service.atualizarStatus(1, { id: 10 }, { status: StatusPedido.CONFIRMADO }),
+    (err: unknown) => err instanceof ForbiddenError
+  );
+
+  assert.equal(chamadas.updateStatus.length, 0);
 });
 
 test("pedido ja no status informado gera ValidationError", async () => {
@@ -203,7 +249,7 @@ test("pedido ja no status informado gera ValidationError", async () => {
   const service = new PedidoService(repo);
 
   await assert.rejects(
-    () => service.atualizarStatus(1, { id: 10 }, { status: StatusPedido.PENDENTE }),
+    () => service.atualizarStatus(1, { id: 10, perfil: "compras" }, { status: StatusPedido.PENDENTE }),
     (err: unknown) => err instanceof ValidationError && /já está pendente/.test((err as Error).message)
   );
 });
@@ -213,7 +259,7 @@ test("pedido inexistente gera NotFoundError antes de transicionar", async () => 
   const service = new PedidoService(repo);
 
   await assert.rejects(
-    () => service.atualizarStatus(999, { id: 10 }, { status: StatusPedido.CONFIRMADO }),
+    () => service.atualizarStatus(999, { id: 10, perfil: "compras" }, { status: StatusPedido.CONFIRMADO }),
     (err: unknown) => err instanceof NotFoundError
   );
   await assert.rejects(
@@ -227,12 +273,17 @@ test("CONCLUIDO sem CPF valido gera ValidationError e nao persiste termo", async
   const service = new PedidoService(repo);
 
   await assert.rejects(
-    () => service.atualizarStatus(1, { id: 10, nome: "Fiscal" }, { status: StatusPedido.CONCLUIDO }),
+    () =>
+      service.atualizarStatus(1, { id: 10, nome: "Fiscal", perfil: "fiscal" }, { status: StatusPedido.CONCLUIDO }),
     (err: unknown) => err instanceof ValidationError && /CPF/.test((err as Error).message)
   );
   await assert.rejects(
     () =>
-      service.atualizarStatus(1, { id: 10, nome: "Fiscal" }, { status: StatusPedido.CONCLUIDO, cpf: "123" }),
+      service.atualizarStatus(
+        1,
+        { id: 10, nome: "Fiscal", perfil: "fiscal" },
+        { status: StatusPedido.CONCLUIDO, cpf: "123" }
+      ),
     (err: unknown) => err instanceof ValidationError && /CPF/.test((err as Error).message)
   );
 
@@ -252,7 +303,7 @@ test("CONCLUIDO com CPF valido gera e persiste o termo de recebimento", async ()
 
     await service.atualizarStatus(
       1,
-      { id: 10, nome: "Fiscal de Teste" },
+      { id: 10, nome: "Fiscal de Teste", perfil: "fiscal" },
       { status: StatusPedido.CONCLUIDO, cpf: "529.982.247-25" }
     );
 
@@ -263,6 +314,46 @@ test("CONCLUIDO com CPF valido gera e persiste o termo de recebimento", async ()
     assert.equal(existsSync(arquivo), true, "arquivo do termo deve existir em uploads/termos");
     const conteudo = await fs.readFile(arquivo, "utf8");
     assert.equal(conteudo, "fake-docx");
+  } finally {
+    await fs.rm(arquivo, { force: true });
+  }
+});
+
+test("termo e baixa usam as quantidades conferidas na nota fiscal", async () => {
+  const pedido = {
+    ...pedidoFixture(StatusPedido.ENTREGUE),
+    notasFiscais: [
+      {
+        id: 7,
+        numeroNota: "NF-1",
+        dataEmissao: new Date(),
+        dataEntrada: new Date(),
+        itens: [{ idItemLicitado: 100, quantidade: 8, marcaConferida: true }],
+      },
+    ],
+  };
+  const { repo } = criarRepoFake({ pedido });
+
+  let itensRecebidos: { quantidade: number; valorTotal: number }[] = [];
+  const geradorFake = {
+    gerar: async (dados: { itens: { quantidade: number; valorTotal: number }[] }) => {
+      itensRecebidos = dados.itens;
+      return Buffer.from("fake-docx");
+    },
+  } as unknown as GeradorTermoRecebimentoDocx;
+  const service = new PedidoService(repo, geradorFake);
+
+  const arquivo = path.join(process.cwd(), "uploads", "termos", "TERMO-RECEBIMENTO-REQ-001.docx");
+  try {
+    await service.atualizarStatus(
+      1,
+      { id: 10, nome: "Fiscal de Teste", perfil: "fiscal" },
+      { status: StatusPedido.CONCLUIDO, cpf: "529.982.247-25" }
+    );
+
+    assert.equal(itensRecebidos.length, 1);
+    assert.equal(itensRecebidos[0].quantidade, 8, "deve usar a quantidade conferida na NF");
+    assert.equal(itensRecebidos[0].valorTotal, 40, "valor total recalculado pela quantidade conferida");
   } finally {
     await fs.rm(arquivo, { force: true });
   }

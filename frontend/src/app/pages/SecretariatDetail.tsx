@@ -58,7 +58,7 @@ export function SecretariatDetail() {
       <div className="max-w-7xl mx-auto space-y-6">
         <button onClick={() => navigate("/secretarias")} className="flex items-center gap-2 text-slate-500 hover:text-slate-900 transition-colors text-sm font-medium">
           <ArrowLeft className="w-4 h-4" />
-          Voltar para Gestão de Secretarias
+          Voltar para Setores e Secretarias
         </button>
         <p className="text-slate-500">Secretaria não encontrada no banco de dados.</p>
       </div>
@@ -111,10 +111,10 @@ export function SecretariatDetail() {
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
-          Secretaria de {secretariat.name}
+          {secretariat.name}
         </h1>
         <p className="text-sm text-slate-500 mt-1">
-          Visão detalhada dos dados desta secretaria
+          Visão detalhada dos dados desta unidade
         </p>
       </div>
 

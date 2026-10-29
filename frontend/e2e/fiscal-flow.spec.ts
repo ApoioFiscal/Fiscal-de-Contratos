@@ -81,6 +81,35 @@ test.describe("Secretaria de Licitações (lic@marizopolis.gov.br)", () => {
   });
 });
 
+test.describe("Compras (compras@marizopolis.gov.br)", () => {
+  test("acessa a fila de compras e não vê Estoque/Avaliações", async ({ page }) => {
+    await logar(page, "compras@marizopolis.gov.br");
+    await expect(page).toHaveURL("/");
+    await expect(itemNav(page, "Dashboard")).toBeVisible();
+    await expect(itemNav(page, "Licitacoes & Contratos")).toBeVisible();
+    await expect(itemNav(page, "Pedidos e Ordens")).toBeVisible();
+    await expect(itemNav(page, "Estoque")).toHaveCount(0);
+    await expect(itemNav(page, "Avaliacoes")).toHaveCount(0);
+  });
+
+  test("opera a fila (registra compra) e não cria pedido", async ({ page }) => {
+    await logar(page, "compras@marizopolis.gov.br");
+    await page.goto("/pedidos");
+    await expect(page.getByText(/Fila de compras/)).toBeVisible();
+    await expect(page.getByText("REQ-002")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Novo Pedido" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Conferir e Concluir" })).toHaveCount(0);
+  });
+
+  test("vê Licitações & Contratos em leitura (sem gerar contrato)", async ({ page }) => {
+    await logar(page, "compras@marizopolis.gov.br");
+    await page.goto("/licitacoes");
+    await expect(page.getByText("LIC-2026-001")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Nova Licitação" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Gerar Contrato" })).toHaveCount(0);
+  });
+});
+
 test.describe("Fiscalização de Contratos (fcon@marizopolis.gov.br)", () => {
   test("acessa todas as áreas operacionais", async ({ page }) => {
     await logar(page, "fcon@marizopolis.gov.br");
@@ -90,11 +119,13 @@ test.describe("Fiscalização de Contratos (fcon@marizopolis.gov.br)", () => {
     await expect(itemNav(page, "Renovacoes")).toBeVisible();
   });
 
-  test("opera a fila de pedidos (ação Registrar Compra visível)", async ({ page }) => {
+  test("conferência final: não registra a compra (etapa do Compras)", async ({ page }) => {
     await logar(page, "fcon@marizopolis.gov.br");
     await page.goto("/pedidos");
     await expect(page.getByText("REQ-002")).toBeVisible();
-    await expect(page.getByRole("button", { name: "Registrar Compra" }).first()).toBeVisible();
+    await expect(page.getByRole("button", { name: "Registrar Compra" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Informar Chegada" })).toHaveCount(0);
+    await expect(page.getByText(/Conferência final/)).toBeVisible();
   });
 
   test("visualiza saldos de estoque do contrato", async ({ page }) => {

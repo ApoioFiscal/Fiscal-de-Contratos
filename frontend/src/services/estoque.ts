@@ -6,7 +6,12 @@ export interface EntradaNotaPayload {
   numeroNota: string;
   dataEmissao: string;
   observacao?: string;
-  itens: { idItemLicitado: number; quantidade: number; valorUnitario?: number }[];
+  itens: {
+    idItemLicitado: number;
+    quantidade: number;
+    valorUnitario?: number;
+    marcaConferida?: boolean;
+  }[];
 }
 
 export interface BaixaPayload {

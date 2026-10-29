@@ -4,6 +4,7 @@ import { existsSync, promises as fs } from "fs";
 import { PedidoRepository } from "./pedido.repository";
 import { CreatePedidoInput, AtualizarStatusPedidoInput } from "../../common/schemas";
 import { ForbiddenError, NotFoundError, ValidationError } from "../../common/errors";
+import { PerfilAcesso } from "../../common/perfil";
 import { GeradorTermoRecebimentoDocx } from "./geradorTermoRecebimento";
 import { gerarNumeroOrdem } from "./pedidoUtils";
 
@@ -14,13 +15,14 @@ interface UsuarioAutenticado {
   idSetor?: number;
   isAdmin?: boolean;
   nome?: string;
+  perfil?: PerfilAcesso;
 }
 
 // Transições de status permitidas no ciclo do pedido.
-// O registro da nota fiscal acontece na etapa de "Registrar Entrega"
-// (EFETUADO -> ENTREGUE). A conferência faz parte do ENTREGUE: no fim, o
-// fiscal conclui (gera o termo), devolve ou cancela. O valor CONFERENCIA foi
-// removido do enum StatusPedido (ver prisma/remover_conferencia.sql).
+// Compras conduz o pedido (registra compra, efetiva e informa a chegada) até
+// ENTREGUE. O FCON (contratos/fiscal) faz a conferência final em ENTREGUE:
+// informa a nota fiscal, as quantidades/marcas conferidas, gera o termo e
+// conclui — ou devolve/cancela.
 const TRANSICOES: Record<StatusPedido, StatusPedido[]> = {
   [StatusPedido.PENDENTE]: [StatusPedido.CONFIRMADO, StatusPedido.CANCELADO],
   [StatusPedido.CONFIRMADO]: [StatusPedido.EFETUADO, StatusPedido.CANCELADO],
@@ -29,6 +31,19 @@ const TRANSICOES: Record<StatusPedido, StatusPedido[]> = {
   [StatusPedido.CONCLUIDO]: [],
   [StatusPedido.DEVOLVIDO]: [],
   [StatusPedido.CANCELADO]: [],
+};
+
+// Quem executa cada transição: Compras opera o pedido até a chegada; o FCON
+// apenas confere/conclui (ou devolve/cancela) quando o pedido está ENTREGUE.
+const PERFIS_POR_TRANSICAO: Record<string, PerfilAcesso[]> = {
+  [`${StatusPedido.PENDENTE}->${StatusPedido.CONFIRMADO}`]: ["compras"],
+  [`${StatusPedido.PENDENTE}->${StatusPedido.CANCELADO}`]: ["compras"],
+  [`${StatusPedido.CONFIRMADO}->${StatusPedido.EFETUADO}`]: ["compras"],
+  [`${StatusPedido.CONFIRMADO}->${StatusPedido.CANCELADO}`]: ["compras"],
+  [`${StatusPedido.EFETUADO}->${StatusPedido.ENTREGUE}`]: ["compras"],
+  [`${StatusPedido.ENTREGUE}->${StatusPedido.CONCLUIDO}`]: ["contratos", "fiscal"],
+  [`${StatusPedido.ENTREGUE}->${StatusPedido.DEVOLVIDO}`]: ["contratos", "fiscal"],
+  [`${StatusPedido.ENTREGUE}->${StatusPedido.CANCELADO}`]: ["contratos", "fiscal"],
 };
 
 export class PedidoService {
@@ -145,6 +160,11 @@ export class PedidoService {
       );
     }
 
+    const perfisPermitidos = PERFIS_POR_TRANSICAO[`${pedido.status}->${input.status}`] ?? [];
+    if (!user.perfil || !perfisPermitidos.includes(user.perfil)) {
+      throw new ForbiddenError("Seu perfil não pode executar esta etapa do pedido");
+    }
+
     let dados = { ...input };
     let arquivoTermo: string | undefined;
 
@@ -159,12 +179,21 @@ export class PedidoService {
         throw new ValidationError("Informe o CPF do fiscal (11 dígitos) para gerar o termo de recebimento");
       }
 
+      // O termo usa as quantidades conferidas na nota fiscal (o que de fato
+      // chegou); se a NF ainda não foi lançada, cai para a quantidade pedida.
+      const itensNota = pedido.notasFiscais?.[0]?.itens ?? [];
+      const itensTermo = pedido.itens.map((item) => {
+        const conferido = itensNota.find((notaItem) => notaItem.idItemLicitado === item.idItemLicitado);
+        const quantidade = conferido?.quantidade ?? item.quantidade;
+        return { ...item, quantidade, valorTotal: item.valorUnitario * quantidade };
+      });
+
       const buffer = await this.geradorTermo.gerar(
         {
           numeroPedido: pedido.numeroPedido,
           contrato: { numero: pedido.contrato.numero },
           setor: pedido.setor ? { nome: pedido.setor.nome } : null,
-          itens: pedido.itens,
+          itens: itensTermo,
         },
         user.nome || "Fiscal de Contratos",
         cpf

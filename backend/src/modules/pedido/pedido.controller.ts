@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { PedidoService } from "./pedido.service";
 import { sendSuccess } from "../../common/middleware";
+import { obterPerfil } from "../../common/perfil";
 
 export class PedidoController {
   constructor(private service: PedidoService) {}
@@ -36,7 +37,7 @@ export class PedidoController {
     const id = Number(req.params.id);
     const pedido = await this.service.atualizarStatus(
       id,
-      { id: req.user?.id as number, nome: req.user?.nome },
+      { id: req.user?.id as number, nome: req.user?.nome, perfil: obterPerfil(req.user) },
       req.body
     );
     sendSuccess(res, pedido);
