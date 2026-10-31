@@ -5,6 +5,7 @@ import { extractStructuredData } from './parserService';
 import { extractStructuredTables } from './tableParserService';
 import { buildMvpExtractionSummary, extractDocumentMetadata } from './documentMetadataService';
 import { extractNotaFiscal } from './notaFiscalService';
+import { buildContratoSummary, extractContrato, isContrato } from './contratoService';
 
 type ParsePdfInput = {
   filePath: string;
@@ -64,7 +65,7 @@ export const parsePdfAndPersist = async (input: ParsePdfInput) => {
     );
   }
 
-  const extractionSummary = buildMvpExtractionSummary({
+  let extractionSummary = buildMvpExtractionSummary({
     metadata: documentMetadata,
     tables: structuredTables,
     pageCount: pdfData.total,
@@ -86,6 +87,31 @@ export const parsePdfAndPersist = async (input: ParsePdfInput) => {
       extraction.dados.campos_rotulados as Record<string, string>,
       extraction.dados.cnpjs as string[],
     );
+  }
+
+  if (isContrato(rawText)) {
+    const contrato = extractContrato(rawText);
+    structuredData.tipo_documento = 'contrato';
+    structuredData.contrato = contrato;
+
+    // Campos de topo usados por consumidores genéricos (ex.: tela de importação de licitações).
+    // Só sobrescreve quando o contrato trouxe valor; os demais ficam como a extração genérica deixou.
+    const [ano, mes, dia] = (contrato.assinatura.data ?? '').split('-');
+    const overrides: Record<string, unknown> = {
+      processo: contrato.numero_processo,
+      modalidade: contrato.modalidade,
+      objeto: contrato.objeto,
+      orgao: contrato.contratante.nome,
+      cliente: contrato.contratante.nome,
+      cnpj_orgao: contrato.contratante.tipo_documento === 'CNPJ' ? contrato.contratante.documento : null,
+      responsavel: contrato.contratante.representante?.nome,
+      data_documento: contrato.assinatura.data ? `${dia}/${mes}/${ano}` : null,
+    };
+    for (const [key, value] of Object.entries(overrides)) {
+      if (value) structuredData[key] = value;
+    }
+
+    extractionSummary = buildContratoSummary(contrato);
   }
 
   return savePdfDocument({

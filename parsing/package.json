@@ -8,7 +8,7 @@
     "db:init": "ts-node --transpile-only src/scripts/initDb.ts",
     "build": "tsc",
     "start": "node dist/index.js",
-    "test": "node --test -r ts-node/register src/services/rulesParserService.test.ts"
+    "test": "node --test -r ts-node/register src/services/rulesParserService.test.ts src/services/contratoService.test.ts"
   },
   "keywords": [],
   "author": "",

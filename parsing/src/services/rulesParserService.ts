@@ -1,3 +1,5 @@
+import { isContrato } from './contratoService';
+
 export type RulesExtraction = {
   resumo: string;
   dados: {
@@ -48,6 +50,10 @@ const extractCeps = (text: string) => {
 };
 
 const inferDocumentType = (text: string) => {
+  // Um termo de contrato cita "licitação"/"dispensa" no corpo; sem esta checagem ele seria
+  // classificado como 'licitacao'. O título e as partes (CONTRATANTE/CONTRATADO) decidem.
+  if (isContrato(text)) return 'contrato';
+
   const lowerText = text.toLowerCase();
 
   if (lowerText.includes('pregao') || lowerText.includes('pregão')) return 'pregao';
