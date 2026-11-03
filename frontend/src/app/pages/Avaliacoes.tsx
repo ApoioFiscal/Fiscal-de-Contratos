@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { listarLicitacoes } from "@/services/licitacoes";
+import { listarContratos } from "@/services/contratos";
 import {
   listarAvaliacoes,
   criarAvaliacao,
@@ -10,14 +10,14 @@ import { listarFilaPedidos } from "@/services/pedidos";
 import { obterSessao } from "@/services/auth";
 import { format, parseISO } from "date-fns";
 import { Star, X, AlertCircle, Loader2, ClipboardCheck, ThumbsUp, Clock, AlertTriangle } from "lucide-react";
-import type { Avaliacao, Pedido, ResumoAvaliacao, Licitacao } from "@/types/domain";
+import type { Avaliacao, Pedido, ResumoAvaliacao, Contrato } from "@/types/domain";
 import { STATUS_PEDIDO_LABEL } from "@/types/domain";
 
 export function Avaliacoes() {
   const sessao = obterSessao();
   const podeAvaliar = sessao?.perfil === "contratos" || sessao?.perfil === "fiscal" || sessao?.perfil === "gabinete";
 
-  const [contratos, setContratos] = useState<Licitacao[]>([]);
+  const [contratos, setContratos] = useState<Contrato[]>([]);
   const [idContrato, setIdContrato] = useState<number | "">("");
   const [resumo, setResumo] = useState<ResumoAvaliacao | null>(null);
   const [avaliacoes, setAvaliacoes] = useState<Avaliacao[]>([]);
@@ -27,7 +27,7 @@ export function Avaliacoes() {
   const [isOpen, setIsOpen] = useState(false);
 
   useEffect(() => {
-    listarLicitacoes()
+    listarContratos()
       .then(setContratos)
       .catch((err) => setError(err.message));
   }, []);
@@ -82,7 +82,7 @@ const reload = useCallback(async (id: number) => {
             >
               <option value="">Selecione um contrato...</option>
               {contratos.map((c) => (
-                <option key={c.id} value={c.id}>{c.numero} — {c.fornecedor}</option>
+                <option key={c.id} value={c.id}>{c.numero} — {c.partes?.find((p) => p.papel === "CONTRATADO")?.nome ?? "—"}</option>
               ))}
             </select>
           </div>

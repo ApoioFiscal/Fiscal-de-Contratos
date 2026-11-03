@@ -35,50 +35,159 @@ export interface Setor {
   sigla: string;
 }
 
-export interface ItemLicitado {
+// ---------- CONTRATO (extração real do PDF assinado) ----------
+
+export type PapelParte = "CONTRATANTE" | "CONTRATADO";
+
+export type PapelSignatario = "CONTRATANTE" | "CONTRATADO" | "TESTEMUNHA";
+
+export type TipoDocumento = "CNPJ" | "CPF";
+
+export interface PessoaContrato {
+  nome: string | null;
+  cargo: string | null;
+  cpf: string | null;
+  rg: string | null;
+  orgaoEmissorRg: string | null;
+  nacionalidade: string | null;
+  estadoCivil: string | null;
+  profissao: string | null;
+  endereco: string | null;
+}
+
+export interface ContratoParte {
+  papel: PapelParte;
+  nome: string | null;
+  documento: string | null;
+  tipoDocumento: TipoDocumento | null;
+  endereco: string | null;
+  representanteNome: string | null;
+  representanteCargo: string | null;
+  representanteCpf: string | null;
+  representanteRg: string | null;
+  representanteOrgaoEmissorRg: string | null;
+  representanteNacionalidade: string | null;
+  representanteEstadoCivil: string | null;
+  representanteProfissao: string | null;
+  representanteEndereco: string | null;
+}
+
+export interface ContratoSignatario {
+  papel: PapelSignatario;
+  ordem: number;
+  nome: string | null;
+  cargo: string | null;
+  cpf: string | null;
+  cnpj: string | null;
+  rg: string | null;
+  orgaoEmissorRg: string | null;
+  nacionalidade: string | null;
+  estadoCivil: string | null;
+  profissao: string | null;
+  endereco: string | null;
+  confirmadoNoBloco: boolean;
+  legivel: boolean;
+}
+
+export interface ContratoItem {
   id: number;
-  idLicitacao: number;
+  codigo: number | null;
   descricao: string;
-  marca: string;
   unidade: string;
+  unidadeOriginal: string | null;
   quantidade: number;
-  precoUnitario: number;
-  precoTotal: number;
+  valorUnitario: number;
+  valorTotal: number;
+  correcoes: string[];
   recebido: number;
   consumido: number;
 }
 
-export interface LicitacaoSetor {
+export interface ContratoDotacao {
+  id: number;
+  idContrato: number;
+  unidadeCodigo: string;
+  unidade: string;
+  funcionalProgramatica: string | null;
+  acao: string | null;
+  ficha: string | null;
+  elementoCodigo: string | null;
+  elementoDescricao: string | null;
+  naturezaCodigo: string | null;
+  natureza: string | null;
+  complemento: string | null;
+}
+
+export interface ContratoSetor {
+  id: number;
+  idContrato: number;
   idSetor: number;
+  origem: "DOTACAO" | "MANUAL";
   setor: Setor;
 }
 
-export interface Licitacao {
+export interface Contrato {
   id: number;
   numero: string;
-  numeroProcesso: string;
-  modalidade: string;
-  objeto: string;
-  fornecedor: string;
-  cnpjFornecedor: string;
-  dataAbertura: string;
-  dataVigenciaFim: string;
+  numeroProcesso: string | null;
+  modalidade: string | null;
+  numeroModalidade: string | null;
+  objeto: string | null;
+  valorTotal: number | null;
+  vigenciaInicio: string | null;
+  vigenciaFim: string | null;
+  vigenciaFimCalculada: boolean;
+  vigenciaTrecho: string | null;
+  foro: string | null;
   status: StatusContrato;
-  valorTotal: number;
-  arquivoContrato?: string | null;
-  dataGeracaoContrato?: string | null;
-  itens: ItemLicitado[];
-  setores: LicitacaoSetor[];
+  assinaturaLocal: string | null;
+  assinaturaData: string | null;
+  assinaturaDigital: boolean;
+  assinaturaPlataforma: string | null;
+  assinaturaAssinante: string | null;
+  fundamentacaoLegal: string[];
+  condicoes: ContratoCondicoes | null;
+  itensConferemTotalTabela: boolean | null;
+  itensConferemValorContrato: boolean | null;
+  avisos: string[];
+  dadosExtraidos: unknown;
+  arquivoPdf: string | null;
+  arquivoPdfNome: string | null;
+  importadoEm: string;
+  extraidoEm: string;
+  atualizadoEm: string;
+  partes: ContratoParte[];
+  signatarios: ContratoSignatario[];
+  itens: ContratoItem[];
+  dotacoes: ContratoDotacao[];
+  setores: ContratoSetor[];
 }
+
+export interface ContratoCondicoes {
+  prazoExecucao: { quantidade: number; unidade: string; marco: string | null } | null;
+  prazoPagamento: { quantidade: number; unidade: string } | null;
+  reajuste: { prazo: string | null; indice: string | null } | null;
+}
+
+// ---------- Pedidos / estoque / avaliações / termos ----------
 
 export interface PedidoItem {
   id: number;
   idPedido: number;
-  idItemLicitado: number;
+  idContratoItem: number;
   quantidade: number;
   valorUnitario: number;
   valorTotal: number;
-  itemLicitado?: ItemLicitado;
+  itemContrato?: ItemContratoLite;
+}
+
+export interface ItemContratoLite {
+  id: number;
+  descricao: string;
+  unidade: string;
+  marca?: string | null;
+  quantidade?: number;
+  precoUnitario?: number;
 }
 
 export interface NotaFiscalResumo {
@@ -112,32 +221,43 @@ export interface Pedido {
   dataGeracaoTermo: string | null;
   idContrato: number;
   itens: PedidoItem[];
-  contrato?: Pick<Licitacao, "id" | "numero" | "numeroProcesso" | "objeto" | "fornecedor" | "cnpjFornecedor">;
+  contrato?: ContratoResumo;
   setor?: Setor;
   usuario?: { id: number; nome: string };
   notasFiscais?: NotaFiscalResumo[];
   historico?: PedidoHistorico[];
 }
 
+export interface ContratoResumo {
+  id: number;
+  numero: string;
+  numeroProcesso: string | null;
+  objeto: string | null;
+  valorTotal: number | null;
+  vigenciaFim: string | null;
+  status: StatusContrato;
+  partes?: Array<{ nome: string | null; documento: string | null }>;
+}
+
 export interface NotaFiscalItem {
   id: number;
   idNotaFiscal: number;
-  idItemLicitado: number;
+  idContratoItem: number;
   quantidade: number;
   valorUnitario: number;
-  itemLicitado?: Pick<ItemLicitado, "id" | "descricao" | "unidade">;
+  itemContrato?: ItemContratoLite;
 }
 
 export interface Movimentacao {
   id: number;
   tipo: TipoMovimentacao;
-  idItemLicitado: number;
+  idContratoItem: number;
   quantidade: number;
   idNotaFiscal: number | null;
   idPedido: number | null;
   data: string;
   observacao: string | null;
-  itemLicitado?: Pick<ItemLicitado, "id" | "descricao" | "unidade" | "idLicitacao">;
+  itemContrato?: ItemContratoLite;
   pedido?: { id: number; numeroPedido: string };
   notaFiscal?: { id: number; numeroNota: string };
 }
@@ -168,7 +288,7 @@ export interface Avaliacao {
   descricaoProblema: string | null;
   observacao: string | null;
   pedido?: { numeroPedido: string; status: StatusPedido };
-  contrato?: { id: number; numero: string; fornecedor: string };
+  contrato?: { id: number; numero: string };
   usuarioFiscal?: { nome: string };
 }
 
@@ -193,7 +313,7 @@ export interface TermoRenovacao {
   acaoTomada: AcaoTomada | null;
   dataEmissao: string;
   dataResolucao: string | null;
-  contrato?: Pick<Licitacao, "id" | "numero" | "fornecedor" | "dataVigenciaFim" | "status">;
+  contrato?: ContratoResumo;
   usuarioEmissor?: { id: number; nome: string };
   usuarioLicitacao?: { id: number; nome: string };
   setorSolicitante?: Setor;
@@ -202,10 +322,10 @@ export interface TermoRenovacao {
 export interface ItemSaldo {
   id: number;
   descricao: string;
-  marca: string;
   unidade: string;
   quantidade: number;
-  precoUnitario: number;
+  valorUnitario: number;
+  valorTotal: number;
   recebido: number;
   consumido: number;
 }
@@ -221,7 +341,7 @@ export const STATUS_PEDIDO_LABEL: Record<StatusPedido, string> = {
 };
 
 export const STATUS_CONTRATO_LABEL: Record<StatusContrato, string> = {
-  RASCUNHO: "Rascunho",
+  RASCUNDO: "Rascunho",
   ATIVA: "Ativa",
   EM_ADITAMENTO: "Em Aditamento",
   ENCERRADA: "Encerrada",

@@ -13,17 +13,17 @@ import {
 import { useState, useEffect } from "react";
 import { useParams } from "react-router";
 import { apiRequest } from "@/services/api";
-import { listarLicitacoes } from "@/services/licitacoes";
+import { listarContratos } from "@/services/contratos";
 import { listarFilaPedidos, listarMeusPedidos } from "@/services/pedidos";
 import { listarTermos } from "@/services/renovacoes";
 import { obterSessao } from "@/services/auth";
-import type { Licitacao, Pedido, TermoRenovacao } from "@/types/domain";
+import type { Contrato, Pedido, TermoRenovacao } from "@/types/domain";
 
 export function Dashboard() {
   const { id } = useParams();
   const sessao = obterSessao();
   const [sigla, setSigla] = useState("");
-  const [licitacoes, setLicitacoes] = useState<Licitacao[]>([]);
+  const [contratos, setContratos] = useState<Contrato[]>([]);
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
   const [termos, setTermos] = useState<TermoRenovacao[]>([]);
 
@@ -52,9 +52,9 @@ export function Dashboard() {
   const podeConferir = sessao?.perfil === "contratos" || sessao?.perfil === "fiscal";
 
   useEffect(() => {
-    listarLicitacoes()
-      .then(setLicitacoes)
-      .catch(() => setLicitacoes([]));
+    listarContratos()
+      .then(setContratos)
+      .catch(() => setContratos([]));
     (podeOperar ? listarFilaPedidos() : listarMeusPedidos())
       .then(setPedidos)
       .catch(() => setPedidos([]));
@@ -66,21 +66,27 @@ export function Dashboard() {
   }, [podeOperar, podeVerTermos]);
 
   const today = new Date();
-  const expiringBiddings = licitacoes.filter((b) => {
-    const daysLeft = differenceInDays(parseISO(b.dataVigenciaFim), today);
+  const expiringContratos = contratos.filter((c) => {
+    const fim = c.vigenciaFim ? parseISO(c.vigenciaFim) : null;
+    if (!fim) return false;
+    const daysLeft = differenceInDays(fim, today);
     return daysLeft <= 60 && daysLeft >= 0;
   });
 
-  const lowStockItems = licitacoes
-    .flatMap((b) =>
-      b.itens.map((item) => ({ ...item, contrato: b.numero, fornecedor: b.fornecedor }))
+  const lowStockItems = contratos
+    .flatMap((c) =>
+      (c.itens ?? []).map((item) => ({
+        ...item,
+        contrato: c.numero,
+        fornecedor: c.partes?.find((p) => p.papel === "CONTRATADO")?.nome ?? "—",
+      })),
     )
     .filter((item) => item.quantidade > 0 && item.consumido / item.quantidade > 0.85);
 
   const termosPendentes = termos.filter((t) => t.status === "EMITIDO" || t.status === "EM_ANALISE");
 
   const stats = [
-    { label: "Licitações Ativas", value: licitacoes.filter((l) => l.status === "ATIVA").length, icon: PackageSearch, color: "text-blue-600" },
+    { label: "Contratos Ativos", value: contratos.filter((c) => c.status === "ATIVA").length, icon: PackageSearch, color: "text-blue-600" },
     {
       label: podeConferir ? "Aguardando Conferência" : "Pedidos em Andamento",
       value: podeConferir
@@ -89,19 +95,19 @@ export function Dashboard() {
       icon: TrendingUp,
       color: "text-emerald-600",
     },
-    { label: "Contratos a Vencer (60d)", value: expiringBiddings.length, icon: AlertCircle, color: "text-amber-600" },
+    { label: "Contratos a Vencer (60d)", value: expiringContratos.length, icon: AlertCircle, color: "text-amber-600" },
     ...(podeVerTermos
       ? [{ label: "Termos de Renovação Pendentes", value: termosPendentes.length, icon: FileClock, color: "text-rose-600" }]
       : []),
   ];
 
-  const chartData = licitacoes
-    .flatMap((b) =>
-      b.itens.map((i) => ({
+  const chartData = contratos
+    .flatMap((c) =>
+      (c.itens ?? []).map((i) => ({
         name: i.descricao.length > 18 ? i.descricao.slice(0, 18) + "…" : i.descricao,
         consumido: i.consumido,
         restante: i.quantidade - i.consumido,
-      }))
+      })),
     )
     .sort((a, b) => b.consumido - a.consumido)
     .slice(0, 6);
@@ -112,7 +118,7 @@ export function Dashboard() {
         <h1 className="text-2xl font-bold text-slate-900">
           {sigla ? `Visão Geral (${sigla})` : `Visão Geral — ${sessao?.setor?.nome || "Município"}`}
         </h1>
-        <p className="text-sm text-slate-500 mt-1">Acompanhamento de licitações, pedidos, saldos e renovações.</p>
+        <p className="text-sm text-slate-500 mt-1">Acompanhamento de contratos, pedidos, saldos e renovações.</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -155,15 +161,15 @@ export function Dashboard() {
           <h3 className="text-lg font-semibold text-slate-800 mb-4">Atenção Necessária</h3>
 
           <div className="flex-1 overflow-auto space-y-4">
-            {expiringBiddings.map((b) => {
-              const daysLeft = differenceInDays(parseISO(b.dataVigenciaFim), today);
+            {expiringContratos.map((c) => {
+              const daysLeft = differenceInDays(parseISO(c.vigenciaFim as string), today);
               return (
-                <div key={`v-${b.id}`} className="p-4 rounded-lg bg-amber-50 border border-amber-200 flex gap-3">
+                <div key={`v-${c.id}`} className="p-4 rounded-lg bg-amber-50 border border-amber-200 flex gap-3">
                   <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
                   <div>
-                    <h4 className="text-sm font-semibold text-amber-900">Contrato Vencendo: {b.numero}</h4>
+                    <h4 className="text-sm font-semibold text-amber-900">Contrato Vencendo: {c.numero}</h4>
                     <p className="text-xs text-amber-700 mt-1">
-                      Válido até {format(parseISO(b.dataVigenciaFim), "dd/MM/yyyy")} ({daysLeft} dias). Considere solicitar aditivo ou nova licitação.
+                      Válido até {format(parseISO(c.vigenciaFim as string), "dd/MM/yyyy")} ({daysLeft} dias). Considere solicitar aditivo ou nova licitação.
                     </p>
                   </div>
                 </div>
@@ -195,7 +201,7 @@ export function Dashboard() {
               </div>
             ))}
 
-            {expiringBiddings.length === 0 && lowStockItems.length === 0 && (!podeVerTermos || termosPendentes.length === 0) && (
+            {expiringContratos.length === 0 && lowStockItems.length === 0 && (!podeVerTermos || termosPendentes.length === 0) && (
               <div className="text-center text-slate-400 py-8">Nenhum alerta no momento.</div>
             )}
           </div>

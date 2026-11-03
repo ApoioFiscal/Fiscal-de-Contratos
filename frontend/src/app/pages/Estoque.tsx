@@ -1,7 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import {
-  listarLicitacoes,
-} from "@/services/licitacoes";
+import { listarContratos } from "@/services/contratos";
 import {
   resumoContrato,
   listarMovimentacoes,
@@ -17,7 +15,7 @@ import {
   X, AlertCircle, Loader2, ArrowDownToLine, ArrowUpFromLine,
   Package, Layers, ReceiptText
 } from "lucide-react";
-import type { ItemSaldo, Licitacao, Movimentacao, Pedido } from "@/types/domain";
+import type { ItemSaldo, Contrato, Movimentacao, Pedido } from "@/types/domain";
 import { STATUS_PEDIDO_LABEL } from "@/types/domain";
 
 const fmt = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
@@ -26,7 +24,7 @@ export function Estoque() {
   const sessao = obterSessao();
   const podeOperar = sessao?.perfil === "contratos" || sessao?.perfil === "fiscal";
 
-  const [contratos, setContratos] = useState<Licitacao[]>([]);
+  const [contratos, setContratos] = useState<Contrato[]>([]);
   const [idContrato, setIdContrato] = useState<number | "">("");
   const [saldos, setSaldos] = useState<ItemSaldo[]>([]);
   const [movs, setMovs] = useState<Movimentacao[]>([]);
@@ -38,7 +36,7 @@ export function Estoque() {
   const [isBaixaOpen, setIsBaixaOpen] = useState(false);
 
   useEffect(() => {
-    listarLicitacoes()
+    listarContratos()
       .then(setContratos)
       .catch((err) => setError(err.message));
   }, []);
@@ -85,7 +83,7 @@ export function Estoque() {
             >
               <option value="">Selecione um contrato...</option>
               {contratos.map((c) => (
-                <option key={c.id} value={c.id}>{c.numero} — {c.fornecedor}</option>
+                <option key={c.id} value={c.id}>{c.numero} — {c.partes?.find((p) => p.papel === "CONTRATADO")?.nome ?? "—"}</option>
               ))}
             </select>
           </div>
@@ -152,8 +150,8 @@ export function Estoque() {
                       return (
                         <tr key={item.id}>
                           <td className="px-4 py-3 font-medium text-slate-900">
-                            {item.descricao}{item.marca ? ` (${item.marca})` : ""}
-                            <span className="block text-xs text-slate-400">{item.unidade} · {fmt.format(item.precoUnitario)}</span>
+                            {item.descricao}
+                            <span className="block text-xs text-slate-400">{item.unidade} · {fmt.format(item.valorUnitario)}</span>
                           </td>
                           <td className="px-4 py-3 text-right text-slate-700">{item.quantidade}</td>
                           <td className="px-4 py-3 text-right text-slate-700">{item.recebido}</td>
@@ -186,9 +184,9 @@ export function Estoque() {
                       {m.tipo === "ENTRADA" ? "Entrada" : "Baixa"}
                     </span>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-slate-800">{m.itemLicitado?.descricao}</p>
+                      <p className="text-sm font-medium text-slate-800">{m.itemContrato?.descricao}</p>
                       <p className="text-xs text-slate-500">
-                        {m.quantidade} {m.itemLicitado?.unidade}
+                        {m.quantidade} {m.itemContrato?.unidade}
                         {m.pedido ? ` · ${m.pedido.numeroPedido}` : ""}
                         {m.notaFiscal ? ` · NF ${m.notaFiscal.numeroNota}` : ""}
                       </p>
@@ -205,7 +203,6 @@ export function Estoque() {
             isEntradaOpen ? (
               <EntradaNotaModal
                 pedidos={pedidos.filter((p) => p.idContrato === Number(idContrato) && ["ENTREGUE", "CONCLUIDO"].includes(p.status))}
-                contratos={contratos}
                 onCancel={() => setIsEntradaOpen(false)}
                 onSalvar={async (payload: EntradaNotaPayload, id: number) => {
                   try {
@@ -262,13 +259,13 @@ function EntradaNotaModal({
     setIdPedido(id);
     const pe = pedidos.find((p) => p.id === id);
     const qtds: Record<number, string> = {};
-    pe?.itens.forEach((i) => { qtds[i.idItemLicitado] = ""; });
+    pe?.itens.forEach((i) => { qtds[i.idContratoItem] = ""; });
     setQuantidades(qtds);
   };
 
   const selecionados = pedido
     ? pedido.itens
-        .map((item) => ({ item, quantidade: Number(quantidades[item.idItemLicitado]) || 0 }))
+        .map((item) => ({ item, quantidade: Number(quantidades[item.idContratoItem]) || 0 }))
         .filter((s) => s.quantidade > 0)
     : [];
 
@@ -284,7 +281,7 @@ function EntradaNotaModal({
           idPedido: pedido.id,
           numeroNota: numeroNota.trim(),
           dataEmissao: dataEmissao,
-          itens: selecionados.map((s) => ({ idItemLicitado: s.item.idItemLicitado, quantidade: s.quantidade })),
+          itens: selecionados.map((s) => ({ idContratoItem: s.item.idContratoItem, quantidade: s.quantidade })),
         },
         pedido.idContrato
       );
@@ -362,15 +359,15 @@ function EntradaNotaModal({
                 {pedido.itens.map((item) => (
                   <div key={item.id} className="px-4 py-3 flex items-center gap-3">
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-slate-900">{item.itemLicitado?.descricao}</p>
-                      <p className="text-xs text-slate-500">Qtd pedida: {item.quantidade} {item.itemLicitado?.unidade}</p>
+                      <p className="text-sm font-medium text-slate-900">{item.itemContrato?.descricao}</p>
+                      <p className="text-xs text-slate-500">Qtd pedida: {item.quantidade} {item.itemContrato?.unidade}</p>
                     </div>
                     <input
                       type="number"
                       min="0"
                       placeholder="0"
-                      value={quantidades[item.idItemLicitado] ?? ""}
-                      onChange={(e) => setQuantidades((q) => ({ ...q, [item.idItemLicitado]: e.target.value }))}
+                      value={quantidades[item.idContratoItem] ?? ""}
+                      onChange={(e) => setQuantidades((q) => ({ ...q, [item.idContratoItem]: e.target.value }))}
                       className="w-28 px-3 py-2 border border-slate-300 rounded-lg text-sm text-right focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
@@ -425,7 +422,7 @@ function BaixaModal({
     setErro(null);
     try {
       await onSalvar({
-        idItemLicitado: item.id,
+        idContratoItem: item.id,
         quantidade: Number(quantidade),
         idPedido: idPedido === "" ? undefined : Number(idPedido),
         observacao: observacao.trim() || undefined,

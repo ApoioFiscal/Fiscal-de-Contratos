@@ -179,7 +179,7 @@ export function destinoInicialPorPerfil(perfil: PerfilAcesso): string {
   }
 
   if (perfil === "licitacoes") {
-    return "/licitacoes";
+    return "/contratos";
   }
 
   return "/";

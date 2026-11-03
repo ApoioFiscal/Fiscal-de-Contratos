@@ -1,0 +1,78 @@
+import { apiRequest } from "./api";
+import type { Contrato } from "@/types/domain";
+
+/** Resposta do `POST /api/contratos/importar` (após parsing + Zod + persistência). */
+export type ImportacaoContratoResult = {
+  id: number;
+  status: string;
+  avisos: string[];
+};
+
+export interface AtualizarContratoPayload {
+  confirmar?: boolean;
+  status?: string;
+  numero_contrato?: string | null;
+  numero_processo?: string | null;
+  modalidade?: string | null;
+  numero_modalidade?: string | null;
+  objeto?: string | null;
+  valor_total?: number | null;
+  vigencia?: {
+    data_inicio?: string | null;
+    data_fim?: string | null;
+    data_fim_calculada?: boolean;
+    trecho?: string | null;
+  } | null;
+  setores?: Array<{ idSetor: number; origem?: "DOTACAO" | "MANUAL" }>;
+}
+
+export async function listarContratos(): Promise<Contrato[]> {
+  return apiRequest<Contrato[]>("/contratos");
+}
+
+export async function obterContrato(id: number): Promise<Contrato> {
+  return apiRequest<Contrato>(`/contratos/${id}`);
+}
+
+export async function importarContratoArquivo(arquivo: File): Promise<ImportacaoContratoResult> {
+  const token = localStorage.getItem("token");
+  const formData = new FormData();
+  formData.append("file", arquivo, arquivo.name);
+
+  const response = await fetch(`/api/contratos/importar?nome=${encodeURIComponent(arquivo.name)}`, {
+    method: "POST",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: formData,
+  });
+
+  const payload = (await response.json().catch(() => null)) as
+    | { success?: boolean; data?: ImportacaoContratoResult }
+    | null;
+
+  if (!response.ok || !payload?.success || !payload.data) {
+    throw new Error("Falha ao importar o contrato a partir do PDF.");
+  }
+
+  // Recarrega o contrato persistido para devolver o estado completo (com itens,
+  // partes, signatários e avisos) para a tela de revisão.
+  const contrato = await obterContrato(payload.data.id).catch(() => null);
+  return { ...payload.data, ...(contrato ?? {}) };
+}
+
+export async function atualizarContrato(id: number, payload: AtualizarContratoPayload): Promise<Contrato> {
+  return apiRequest<Contrato>(`/contratos/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function baixarArquivoContrato(id: number): Promise<Blob> {
+  const token = localStorage.getItem("token");
+  const response = await fetch(`/api/contratos/${id}/arquivo`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!response.ok) {
+    throw new Error("Não foi possível baixar o contrato.");
+  }
+  return response.blob();
+}

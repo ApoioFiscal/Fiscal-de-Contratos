@@ -7,7 +7,7 @@ export interface EntradaNotaPayload {
   dataEmissao: string;
   observacao?: string;
   itens: {
-    idItemLicitado: number;
+    idContratoItem: number;
     quantidade: number;
     valorUnitario?: number;
     marcaConferida?: boolean;
@@ -15,7 +15,7 @@ export interface EntradaNotaPayload {
 }
 
 export interface BaixaPayload {
-  idItemLicitado: number;
+  idContratoItem: number;
   quantidade: number;
   idPedido?: number;
   observacao?: string;
@@ -36,11 +36,11 @@ export async function registrarBaixa(payload: BaixaPayload): Promise<Movimentaca
 }
 
 export async function listarMovimentacoes(params: {
-  itemLicitadoId?: number;
+  itemContratoId?: number;
   contratoId?: number;
 }): Promise<Movimentacao[]> {
   const query = new URLSearchParams();
-  if (params.itemLicitadoId) query.set("itemLicitadoId", String(params.itemLicitadoId));
+  if (params.itemContratoId) query.set("itemContratoId", String(params.itemContratoId));
   if (params.contratoId) query.set("contratoId", String(params.contratoId));
   const qs = query.toString();
   return apiRequest<Movimentacao[]>(`/estoque${qs ? `?${qs}` : ""}`);

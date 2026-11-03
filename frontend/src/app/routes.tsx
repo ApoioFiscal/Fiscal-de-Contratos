@@ -1,7 +1,7 @@
 import { createBrowserRouter } from "react-router";
 import { Layout } from "./components/Layout";
 import { Dashboard } from "./pages/Dashboard";
-import { Biddings } from "./pages/Biddings";
+import { Contracts } from "./pages/Contracts";
 import { Requests } from "./pages/Requests";
 import { Estoque } from "./pages/Estoque";
 import { Avaliacoes } from "./pages/Avaliacoes";
@@ -27,7 +27,7 @@ export const router = createBrowserRouter([
           { index: true, Component: Dashboard },
           { path: "secretarias", Component: Secretariats },
           { path: "secretarias/:id", Component: SecretariatDetail },
-          { path: "licitacoes", Component: Biddings },
+          { path: "contratos", Component: Contracts },
           { path: "pedidos", Component: Requests },
           { path: "estoque", Component: Estoque },
           { path: "avaliacoes", Component: Avaliacoes },

@@ -15,7 +15,7 @@ import {
   Legend,
 } from "recharts";
 
-type Tab = "dashboard" | "licitacoes" | "pedidos";
+type Tab = "dashboard" | "contratos" | "pedidos";
 
 export function SecretariatDetail() {
   const { id } = useParams<{ id: string }>();
@@ -65,7 +65,7 @@ export function SecretariatDetail() {
     );
   }
 
-  // Filter data for this secretariat (Por enquanto usando Mocks para Licitações e Pedidos)
+  // Filter data for this secretariat (Por enquanto usando Mocks para Contratos e Pedidos)
   const secretariatBiddings = MOCK_BIDDINGS.filter(b =>
     b.secretariats.includes(secretariat.name)
   );
@@ -86,7 +86,7 @@ export function SecretariatDetail() {
     .filter(item => item.consumed / item.totalQuantity > 0.85);
 
   const stats = [
-    { label: "Licitações Ativas", value: secretariatBiddings.length, icon: PackageSearch, color: "text-blue-600" },
+    { label: "Contratos Ativos", value: secretariatBiddings.length, icon: PackageSearch, color: "text-blue-600" },
     { label: "Pedidos no Mês", value: secretariatRequests.length, icon: TrendingUp, color: "text-emerald-600" },
     { label: "Contratos a Vencer", value: expiringBiddings.length, icon: AlertCircle, color: "text-amber-600" },
     { label: "Itens em Alerta (Saldo)", value: lowStockItems.length, icon: AlertCircle, color: "text-rose-600" },
@@ -102,7 +102,7 @@ export function SecretariatDetail() {
 
   const tabs: { id: Tab; label: string; icon: React.ElementType }[] = [
     { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-    { id: "licitacoes", label: "Licitações & Contratos", icon: FileText },
+    { id: "contratos", label: "Contratos", icon: FileText },
     { id: "pedidos", label: "Pedidos e Ordens", icon: ShoppingCart },
   ];
 
@@ -218,11 +218,11 @@ export function SecretariatDetail() {
             </div>
           )}
 
-          {/* Licitações Tab */}
-          {activeTab === "licitacoes" && (
+          {/* Contratos Tab */}
+          {activeTab === "contratos" && (
             <div className="space-y-4">
               {secretariatBiddings.length === 0 ? (
-                <p className="text-center text-slate-500 py-12">Nenhuma licitação vinculada a esta secretaria.</p>
+                <p className="text-center text-slate-500 py-12">Nenhum contrato vinculado a esta secretaria.</p>
               ) : (
                 <div className="divide-y divide-slate-200 border border-slate-200 rounded-xl overflow-hidden">
                   {secretariatBiddings.map(bidding => (
@@ -322,7 +322,7 @@ export function SecretariatDetail() {
                       <tr>
                         <th className="px-4 py-3 text-left font-medium text-slate-500">Pedido</th>
                         <th className="px-4 py-3 text-left font-medium text-slate-500">Data</th>
-                        <th className="px-4 py-3 text-left font-medium text-slate-500">Licitação</th>
+                        <th className="px-4 py-3 text-left font-medium text-slate-500">Contrato</th>
                         <th className="px-4 py-3 text-left font-medium text-slate-500">Status</th>
                         <th className="px-4 py-3 text-right font-medium text-slate-500">Total</th>
                       </tr>

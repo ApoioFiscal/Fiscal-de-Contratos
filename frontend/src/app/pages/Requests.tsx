@@ -9,7 +9,7 @@ import {
   type CriarPedidoPayload,
 } from "@/services/pedidos";
 import { registrarEntradaNota, resumoContrato, listarMovimentacoes } from "@/services/estoque";
-import { listarLicitacoes } from "@/services/licitacoes";
+import { listarContratos } from "@/services/contratos";
 import { obterSessao } from "@/services/auth";
 import { format, parseISO, isAfter, startOfToday } from "date-fns";
 import {
@@ -17,7 +17,7 @@ import {
   ChevronDown, ChevronUp, ShoppingCart, Truck, Ban, RotateCcw, ClipboardCheck,
   MessageSquareWarning, ReceiptText, Upload, FileDown, Filter, Maximize2
 } from "lucide-react";
-import type { ItemSaldo, Licitacao, Movimentacao, Pedido, StatusPedido } from "@/types/domain";
+import type { ItemSaldo, Contrato, Movimentacao, Pedido, StatusPedido } from "@/types/domain";
 import { STATUS_PEDIDO_LABEL } from "@/types/domain";
 
 const fmt = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
@@ -88,7 +88,7 @@ export function Requests() {
   const [ordem, setOrdem] = useState<"recentes" | "antigos">("recentes");
 
   const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [contratos, setContratos] = useState<Licitacao[]>([]);
+  const [contratos, setContratos] = useState<Contrato[]>([]);
   const [criando, setCriando] = useState(false);
 
   const [isStatusOpen, setIsStatusOpen] = useState(false);
@@ -125,7 +125,7 @@ export function Requests() {
 
   useEffect(() => {
     if (!isCreateOpen) return;
-    listarLicitacoes()
+    listarContratos()
       .then((lics) => {
         if (podeCriar && perfil === "secretaria") {
           const mine = lics.filter((l) => l.setores.some((s) => s.idSetor === sessao?.idSetor));
@@ -171,7 +171,7 @@ export function Requests() {
       p.numeroPedido.toLowerCase().includes(termo) ||
       (p.setor?.nome || "").toLowerCase().includes(termo) ||
       (p.contrato?.numero || "").toLowerCase().includes(termo) ||
-      (p.contrato?.fornecedor || "").toLowerCase().includes(termo)
+      (p.contrato?.partes?.[0]?.nome ?? "").toLowerCase().includes(termo)
     );
   };
 
@@ -474,12 +474,12 @@ export function Requests() {
             const total = pedido.itens.reduce((s, i) => s + i.valorTotal, 0);
             const expandido = expandedId === pedido.id;
             const prazoVencido = atrasado(pedido);
-            const idItensPedido = new Set(pedido.itens.map((i) => i.idItemLicitado));
+            const idItensPedido = new Set(pedido.itens.map((i) => i.idContratoItem));
             const movsPedido = movs.filter((m) => m.idPedido === pedido.id);
             const recebidoPorItem = new Map<number, number>();
             for (const m of movsPedido) {
               if (m.tipo === "ENTRADA") {
-                recebidoPorItem.set(m.idItemLicitado, (recebidoPorItem.get(m.idItemLicitado) ?? 0) + m.quantidade);
+                recebidoPorItem.set(m.idContratoItem, (recebidoPorItem.get(m.idContratoItem) ?? 0) + m.quantidade);
               }
             }
             return (
@@ -571,8 +571,8 @@ export function Requests() {
                         </div>
                         <div>
                           <span className="block text-xs text-slate-500 mb-1">Fornecedor</span>
-                          <span className="font-medium text-slate-900">{pedido.contrato?.fornecedor}</span>
-                          <span className="block text-xs text-slate-400">{pedido.contrato?.cnpjFornecedor}</span>
+                          <span className="font-medium text-slate-900">{pedido.contrato?.partes?.[0]?.nome}</span>
+                          <span className="block text-xs text-slate-400">{pedido.contrato?.partes?.[0]?.documento}</span>
                         </div>
                         <div>
                           <span className="block text-xs text-slate-500 mb-1">Processo / Contrato</span>
@@ -623,10 +623,10 @@ export function Requests() {
                             {pedido.itens.map((item) => (
                               <tr key={item.id}>
                                 <td className="px-3 py-2 text-slate-900">
-                                  {item.itemLicitado?.descricao || `Item ${item.idItemLicitado}`}
-                                  {item.itemLicitado?.marca ? ` (${item.itemLicitado.marca})` : ""}
+                                  {item.itemContrato?.descricao || `Item ${item.idContratoItem}`}
+                                  {item.itemContrato?.marca ? ` (${item.itemContrato.marca})` : ""}
                                 </td>
-                                <td className="px-3 py-2 text-right text-slate-700">{item.itemLicitado?.unidade || "—"}</td>
+                                <td className="px-3 py-2 text-right text-slate-700">{item.itemContrato?.unidade || "—"}</td>
                                 <td className="px-3 py-2 text-right text-slate-700">{item.quantidade}</td>
                                 <td className="px-3 py-2 text-right text-slate-700">{fmt.format(item.valorUnitario)}</td>
                                 <td className="px-3 py-2 text-right font-medium text-slate-900">{fmt.format(item.valorTotal)}</td>
@@ -708,7 +708,7 @@ export function Requests() {
                                   <span className={`font-medium ${m.tipo === "ENTRADA" ? "text-emerald-600" : "text-orange-600"}`}>
                                     {m.tipo === "ENTRADA" ? "Entrada" : "Baixa"}
                                   </span>{" "}
-                                  · {m.itemLicitado?.descricao} · {m.quantidade} {m.itemLicitado?.unidade}
+                                  · {m.itemContrato?.descricao} · {m.quantidade} {m.itemContrato?.unidade}
                                   {m.notaFiscal ? ` · NF ${m.notaFiscal.numeroNota}` : ""} · {format(parseISO(m.data), "dd/MM/yyyy")}
                                 </p>
                               ))}
@@ -1036,13 +1036,13 @@ function NovoPedidoModal({
   onCancel,
   onSalvar,
 }: {
-  contratos: Licitacao[];
+  contratos: Contrato[];
   carregando: boolean;
   onCancel: () => void;
   onSalvar: (payload: CriarPedidoPayload) => void;
 }) {
   const [idContrato, setIdContrato] = useState<number | "">("");
-  const [itens, setItens] = useState<{ idItemLicitado: number; quantidade: string }[]>([]);
+  const [itens, setItens] = useState<{ idContratoItem: number; quantidade: string }[]>([]);
   const [dataPrevista, setDataPrevista] = useState("");
   const [observacao, setObservacao] = useState("");
 
@@ -1051,7 +1051,7 @@ function NovoPedidoModal({
   const selecionarContrato = (id: number) => {
     setIdContrato(id);
     const lic = contratos.find((c) => c.id === id);
-    setItens(lic ? lic.itens.map((i) => ({ idItemLicitado: i.id, quantidade: "" })) : []);
+    setItens(lic ? lic.itens.map((i) => ({ idContratoItem: i.id, quantidade: "" })) : []);
   };
 
   const atualizarQtd = (idx: number, qtd: string) =>
@@ -1069,7 +1069,7 @@ function NovoPedidoModal({
       idContrato: Number(idContrato),
       dataPrevistaEntrega: dataPrevista,
       observacao: observacao.trim() || undefined,
-      itens: selecionados.map((s) => ({ idItemLicitado: s.item!.id, quantidade: s.quantidade })),
+      itens: selecionados.map((s) => ({ idContratoItem: s.item!.id, quantidade: s.quantidade })),
     });
   };
 
@@ -1098,7 +1098,7 @@ function NovoPedidoModal({
               <option value="">Selecione um contrato...</option>
               {contratos.map((c) => (
                 <option key={c.id} value={c.id}>
-                  {c.numero} — {c.fornecedor}
+                  {c.numero} — {c.partes?.find((p) => p.papel === "CONTRATADO")?.nome ?? "—"}
                 </option>
               ))}
             </select>
@@ -1224,9 +1224,9 @@ function InformarChegadaModal({
             <ul className="space-y-1">
               {pedido.itens.map((item) => (
                 <li key={item.id} className="text-sm text-slate-800 flex justify-between gap-3">
-                  <span className="truncate">{item.itemLicitado?.descricao}</span>
+                  <span className="truncate">{item.itemContrato?.descricao}</span>
                   <span className="text-slate-500 shrink-0">
-                    {item.quantidade} {item.itemLicitado?.unidade}
+                    {item.quantidade} {item.itemContrato?.unidade}
                   </span>
                 </li>
               ))}
@@ -1279,7 +1279,7 @@ function ConferirConclusaoModal({
     dataEmissao: string;
     cpf: string;
     observacao?: string;
-    itens: { idItemLicitado: number; quantidade: number; marcaConferida: boolean }[];
+    itens: { idContratoItem: number; quantidade: number; marcaConferida: boolean }[];
   }) => Promise<void>;
 }) {
   const [numeroNota, setNumeroNota] = useState("");
@@ -1287,10 +1287,10 @@ function ConferirConclusaoModal({
   const [cpf, setCpf] = useState("");
   const [fornecedorExtraido, setFornecedorExtraido] = useState("");
   const [quantidades, setQuantidades] = useState<Record<number, string>>(() =>
-    Object.fromEntries(pedido.itens.map((i) => [i.idItemLicitado, String(i.quantidade)]))
+    Object.fromEntries(pedido.itens.map((i) => [i.idContratoItem, String(i.quantidade)]))
   );
   const [marcasConferidas, setMarcasConferidas] = useState<Record<number, boolean>>(() =>
-    Object.fromEntries(pedido.itens.map((i) => [i.idItemLicitado, false]))
+    Object.fromEntries(pedido.itens.map((i) => [i.idContratoItem, false]))
   );
   const [observacao, setObservacao] = useState("");
   const [salvando, setSalvando] = useState(false);
@@ -1299,9 +1299,9 @@ function ConferirConclusaoModal({
 
   const selecionados = pedido.itens
     .map((item) => ({
-      idItemLicitado: item.idItemLicitado,
-      quantidade: Number(quantidades[item.idItemLicitado]) || 0,
-      marcaConferida: Boolean(marcasConferidas[item.idItemLicitado]),
+      idContratoItem: item.idContratoItem,
+      quantidade: Number(quantidades[item.idContratoItem]) || 0,
+      marcaConferida: Boolean(marcasConferidas[item.idContratoItem]),
     }))
     .filter((s) => s.quantidade > 0);
 
@@ -1442,20 +1442,20 @@ function ConferirConclusaoModal({
               {pedido.itens.map((item) => (
                 <div key={item.id} className="px-4 py-3 flex flex-wrap items-center gap-3">
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-slate-900">{item.itemLicitado?.descricao}</p>
+                    <p className="text-sm font-medium text-slate-900">{item.itemContrato?.descricao}</p>
                     <p className="text-xs text-slate-500">
-                      Qtd pedida: {item.quantidade} {item.itemLicitado?.unidade}
-                      {item.itemLicitado?.marca ? ` · Marca do contrato: ${item.itemLicitado.marca}` : ""}
+                      Qtd pedida: {item.quantidade} {item.itemContrato?.unidade}
+                      {item.itemContrato?.marca ? ` · Marca do contrato: ${item.itemContrato.marca}` : ""}
                     </p>
                   </div>
                   <label className="flex items-center gap-2 text-xs text-slate-600">
                     <input
                       type="checkbox"
-                      checked={Boolean(marcasConferidas[item.idItemLicitado])}
+                      checked={Boolean(marcasConferidas[item.idContratoItem])}
                       onChange={(e) =>
-                        setMarcasConferidas((m) => ({ ...m, [item.idItemLicitado]: e.target.checked }))
+                        setMarcasConferidas((m) => ({ ...m, [item.idContratoItem]: e.target.checked }))
                       }
-                      aria-label={`Marca conferida de ${item.itemLicitado?.descricao || item.idItemLicitado}`}
+                      aria-label={`Marca conferida de ${item.itemContrato?.descricao || item.idContratoItem}`}
                       className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
                     />
                     Marca conferida
@@ -1464,14 +1464,14 @@ function ConferirConclusaoModal({
                     type="number"
                     min="0"
                     inputMode="decimal"
-                    value={quantidades[item.idItemLicitado] ?? ""}
+                    value={quantidades[item.idContratoItem] ?? ""}
                     onChange={(e) =>
-                      setQuantidades((q) => ({ ...q, [item.idItemLicitado]: e.target.value }))
+                      setQuantidades((q) => ({ ...q, [item.idContratoItem]: e.target.value }))
                     }
-                    aria-label={`Quantidade conferida de ${item.itemLicitado?.descricao || item.idItemLicitado}`}
+                    aria-label={`Quantidade conferida de ${item.itemContrato?.descricao || item.idContratoItem}`}
                     className="w-24 px-3 py-2 border border-slate-300 rounded-lg text-sm text-right focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
-                  <span className="w-10 text-sm text-slate-500">{item.itemLicitado?.unidade}</span>
+                  <span className="w-10 text-sm text-slate-500">{item.itemContrato?.unidade}</span>
                 </div>
               ))}
             </div>

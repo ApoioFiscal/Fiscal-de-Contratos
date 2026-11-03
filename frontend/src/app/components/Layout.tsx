@@ -19,18 +19,18 @@ const navItemsPorPerfil: Record<PerfilAcesso, NavItem[]> = {
   ],
   licitacoes: [
     { to: "/", icon: LayoutDashboard, label: "Dashboard" },
-    { to: "/licitacoes", icon: FileText, label: "Licitacoes & Contratos" },
+    { to: "/contratos", icon: FileText, label: "Contratos" },
     { to: "/pedidos", icon: ShoppingCart, label: "Pedidos e Ordens" },
     { to: "/renovacoes", icon: RefreshCcw, label: "Renovacoes" },
   ],
   compras: [
     { to: "/", icon: LayoutDashboard, label: "Dashboard" },
-    { to: "/licitacoes", icon: FileText, label: "Licitacoes & Contratos" },
+    { to: "/contratos", icon: FileText, label: "Contratos" },
     { to: "/pedidos", icon: ShoppingCart, label: "Pedidos e Ordens" },
   ],
   contratos: [
     { to: "/", icon: LayoutDashboard, label: "Dashboard" },
-    { to: "/licitacoes", icon: FileText, label: "Licitacoes & Contratos" },
+    { to: "/contratos", icon: FileText, label: "Contratos" },
     { to: "/pedidos", icon: ShoppingCart, label: "Pedidos e Ordens" },
     { to: "/avaliacoes", icon: Star, label: "Avaliacoes" },
   ],
@@ -41,7 +41,7 @@ const navItemsPorPerfil: Record<PerfilAcesso, NavItem[]> = {
   ],
   fiscal: [
     { to: "/", icon: LayoutDashboard, label: "Dashboard" },
-    { to: "/licitacoes", icon: FileText, label: "Licitacoes & Contratos" },
+    { to: "/contratos", icon: FileText, label: "Contratos" },
     { to: "/pedidos", icon: ShoppingCart, label: "Pedidos e Ordens" },
     { to: "/avaliacoes", icon: Star, label: "Avaliacoes" },
   ],
@@ -70,7 +70,7 @@ export function Layout() {
       <aside className="w-64 bg-slate-900 text-slate-100 flex flex-col">
         <div className="p-6">
           <h1 className="text-xl font-bold tracking-tight">Fiscal de Contratos</h1>
-          <p className="text-xs text-slate-400 mt-1">Gestao de Licitacoes</p>
+          <p className="text-xs text-slate-400 mt-1">Gestao de Contratos</p>
         </div>
         
         <nav className="flex-1 px-4 space-y-2 mt-4">

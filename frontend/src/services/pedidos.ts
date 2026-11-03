@@ -5,7 +5,7 @@ export interface CriarPedidoPayload {
   idContrato: number;
   dataPrevistaEntrega: string;
   observacao?: string;
-  itens: { idItemLicitado: number; quantidade: number }[];
+  itens: { idContratoItem: number; quantidade: number }[];
 }
 
 export interface AtualizarStatusPedidoPayload {

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { listarLicitacoes } from "@/services/licitacoes";
+import { listarContratos } from "@/services/contratos";
 import {
   listarTermos,
   emitirTermo,
@@ -10,7 +10,7 @@ import {
 import { obterSessao } from "@/services/auth";
 import { format, parseISO } from "date-fns";
 import { Plus, X, AlertCircle, Loader2, RefreshCcw, Scale, CalendarClock, FilePlus2, CheckCircle } from "lucide-react";
-import type { AcaoTomada, Licitacao, StatusTermoRenovacao, TermoRenovacao, TipoRenovacao } from "@/types/domain";
+import type { AcaoTomada, Contrato, StatusTermoRenovacao, TermoRenovacao, TipoRenovacao } from "@/types/domain";
 import {
   TIPO_RENOVACAO_LABEL,
   STATUS_TERMO_LABEL,
@@ -31,7 +31,7 @@ export function Renovacoes() {
   const podeResolver = perfil === "licitacoes" || perfil === "gabinete";
 
   const [termos, setTermos] = useState<TermoRenovacao[]>([]);
-  const [contratos, setContratos] = useState<Licitacao[]>([]);
+  const [contratos, setContratos] = useState<Contrato[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -41,7 +41,7 @@ export function Renovacoes() {
 
   const reload = useCallback(() => {
     setLoading(true);
-    Promise.all([listarTermos(), listarLicitacoes()])
+    Promise.all([listarTermos(), listarContratos()])
       .then(([ts, cs]) => {
         setTermos(ts);
         setContratos(cs);
@@ -120,7 +120,7 @@ export function Renovacoes() {
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusChip[t.status]}`}>
                         {STATUS_TERMO_LABEL[t.status]}
                       </span>
-                      <span className="text-sm text-slate-500">{t.contrato?.numero} — {t.contrato?.fornecedor}</span>
+                      <span className="text-sm text-slate-500">{t.contrato?.numero}</span>
                     </div>
                     <p className="text-sm text-slate-600 mt-1 line-clamp-2">{t.justificativa}</p>
                     <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
@@ -200,7 +200,7 @@ function EmitirTermoModal({
   onCancel,
   onSalvar,
 }: {
-  contratos: Licitacao[];
+  contratos: Contrato[];
   onCancel: () => void;
   onSalvar: (payload: CriarTermoPayload) => Promise<void>;
 }) {
@@ -264,7 +264,7 @@ function EmitirTermoModal({
               <option value="">Selecione o contrato...</option>
               {contratos.map((c) => (
                 <option key={c.id} value={c.id}>
-                  {c.numero} — {c.fornecedor} (vigência até {format(parseISO(c.dataVigenciaFim), "dd/MM/yyyy")})
+                  {c.numero} — {c.partes?.find((p) => p.papel === "CONTRATADO")?.nome ?? "—"} (vigência até {c.vigenciaFim ? format(parseISO(c.vigenciaFim), "dd/MM/yyyy") : "—"})
                 </option>
               ))}
             </select>
@@ -379,7 +379,7 @@ function ResolverTermoModal({
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
           <div>
             <h3 className="text-lg font-bold text-slate-900">Analisar Termo #{termo.id}</h3>
-            <p className="text-xs text-slate-500 mt-1">{termo.contrato?.numero} — {termo.contrato?.fornecedor} · {TIPO_RENOVACAO_LABEL[termo.tipo]}</p>
+            <p className="text-xs text-slate-500 mt-1">{termo.contrato?.numero} · {TIPO_RENOVACAO_LABEL[termo.tipo]}</p>
           </div>
           <button onClick={onCancel} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100">
             <X className="w-5 h-5" />
