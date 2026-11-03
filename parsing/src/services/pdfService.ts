@@ -3,9 +3,8 @@ import { readFile } from 'fs/promises';
 import { savePdfDocument } from './dbService';
 import { extractStructuredData } from './parserService';
 import { extractStructuredTables } from './tableParserService';
-import { buildMvpExtractionSummary, extractDocumentMetadata } from './documentMetadataService';
-import { extractNotaFiscal } from './notaFiscalService';
-import { buildContratoSummary, extractContrato, isContrato } from './contratoService';
+import { extractDocumentMetadata } from './documentMetadataService';
+import { buildStructuredData } from './structuredDataService';
 
 type ParsePdfInput = {
   filePath: string;
@@ -59,60 +58,14 @@ export const parsePdfAndPersist = async (input: ParsePdfInput) => {
   const structuredTables = extractStructuredTables(tableData?.pages ?? []);
   const documentMetadata = extractDocumentMetadata(rawText);
 
-  if (tableExtractionError) {
-    structuredTables.avisos_extracao.push(
-      `Nao foi possivel extrair as tabelas do PDF: ${tableExtractionError}`,
-    );
-  }
-
-  let extractionSummary = buildMvpExtractionSummary({
-    metadata: documentMetadata,
-    tables: structuredTables,
+  const { structuredData, extractionSummary } = buildStructuredData({
+    rawText,
     pageCount: pdfData.total,
-    aiSummary: extraction.resumo,
+    extraction,
+    structuredTables,
+    documentMetadata,
+    tableExtractionError,
   });
-
-  const structuredData: Record<string, unknown> = {
-    ...extraction.dados,
-    ...documentMetadata,
-    schema_version: '2.1-mvp',
-    quantidade_paginas: pdfData.total,
-    ...structuredTables,
-  };
-
-  if (extraction.dados.tipo_documento === 'nota_fiscal') {
-    structuredData.nota_fiscal = extractNotaFiscal(
-      rawText,
-      documentMetadata,
-      extraction.dados.campos_rotulados as Record<string, string>,
-      extraction.dados.cnpjs as string[],
-    );
-  }
-
-  if (isContrato(rawText)) {
-    const contrato = extractContrato(rawText);
-    structuredData.tipo_documento = 'contrato';
-    structuredData.contrato = contrato;
-
-    // Campos de topo usados por consumidores genéricos (ex.: tela de importação de licitações).
-    // Só sobrescreve quando o contrato trouxe valor; os demais ficam como a extração genérica deixou.
-    const [ano, mes, dia] = (contrato.assinatura.data ?? '').split('-');
-    const overrides: Record<string, unknown> = {
-      processo: contrato.numero_processo,
-      modalidade: contrato.modalidade,
-      objeto: contrato.objeto,
-      orgao: contrato.contratante.nome,
-      cliente: contrato.contratante.nome,
-      cnpj_orgao: contrato.contratante.tipo_documento === 'CNPJ' ? contrato.contratante.documento : null,
-      responsavel: contrato.contratante.representante?.nome,
-      data_documento: contrato.assinatura.data ? `${dia}/${mes}/${ano}` : null,
-    };
-    for (const [key, value] of Object.entries(overrides)) {
-      if (value) structuredData[key] = value;
-    }
-
-    extractionSummary = buildContratoSummary(contrato);
-  }
 
   return savePdfDocument({
     originalName: input.originalName,

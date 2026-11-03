@@ -279,6 +279,27 @@ test('edital/licitação comum não é tratado como contrato', () => {
   assert.equal(extractWithRules(edital).dados.tipo_documento, 'licitacao');
 });
 
+test('edital com minuta de contrato anexa não é tratado como contrato', () => {
+  const edital = `EDITAL DE PREGÃO ELETRÔNICO Nº 012/2026
+A PREFEITURA MUNICIPAL DE EXEMPLO torna público que realizará licitação.
+ANEXO VI - MINUTA DE TERMO DE CONTRATO
+Pelo presente instrumento, de um lado o MUNICÍPIO DE EXEMPLO, CNPJ 12.345.678/0001-90, doravante simplesmente CONTRATANTE, e do outro lado a empresa vencedora, doravante simplesmente CONTRATADA.
+CLÁUSULA PRIMEIRA - DO OBJETO: o objeto é o do edital.
+CLÁUSULA SEGUNDA - DO VALOR: o da proposta vencedora.
+CLÁUSULA TERCEIRA - DA VIGÊNCIA: 12 meses.
+`;
+
+  assert.equal(isContrato(edital), false);
+  assert.equal(extractWithRules(edital).dados.tipo_documento, 'pregao');
+});
+
+test('número do contrato não carrega a pontuação da frase', () => {
+  const c = extractContrato(
+    'CONTRATO Nº 045/2026. TERMO DE CONTRATO\nCLÁUSULA PRIMEIRA\nCLÁUSULA SEGUNDA\nCLÁUSULA TERCEIRA',
+  );
+  assert.equal(c.numero_contrato, '045/2026');
+});
+
 test('item ilegível gera aviso e NÃO engole o item seguinte', () => {
   const texto = SINTETICO.replace(
     '1 CANETA ESFEROGRÁFICA AZUL CX 100 12,50 1.250,00',

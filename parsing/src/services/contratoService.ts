@@ -211,9 +211,21 @@ const sliceBetween = (text: string, start: RegExp, end: RegExp): string | null =
 
 const HEAD_SIZE = 1500;
 
+/**
+ * Editais e afins costumam trazer a minuta do contrato inteira nos anexos — com
+ * "CONTRATANTE"/"CONTRATADO" e todas as cláusulas. Sem esta guarda, o edital seria
+ * classificado como contrato (ver `edital com minuta anexa` nos testes).
+ */
+const HEAD_MARKS_OTHER_DOCUMENT =
+  /^\s*(?:\d+[.)]\s*)?(?:EDITAL|AVISO\s+DE\s+(?:LICITA[ÇC][ÃA]O|PREG[ÃA]O)|TERMO\s+DE\s+REFER[ÊE]NCIA|PREG[ÃA]O\s+(?:ELETR[ÔO]NICO|PRESENCIAL))/i;
+const MENTIONS_MINUTA = /MINUTA\s+(?:DE|DO)\s+(?:TERMO\s+DE\s+)?CONTRATO/i;
+
 export const isContrato = (text: string): boolean => {
+  const headStart = text.slice(0, 400);
   const head = text.slice(0, HEAD_SIZE);
   const flat = flatten(text);
+
+  if (HEAD_MARKS_OTHER_DOCUMENT.test(headStart) || MENTIONS_MINUTA.test(head)) return false;
 
   const hasTitle =
     /TERMO\s+DE\s+CONTRATO/i.test(head) || new RegExp(String.raw`CONTRATO\s+${NUM}\d`, 'i').test(head);
@@ -349,7 +361,9 @@ const parseParte = (papel: ParteContrato['papel'], clause: string | null): Parte
 
 const extractNumeroContrato = (text: string): string | null => {
   const pattern = new RegExp(String.raw`CONTRATO\s+${NUM}(\d[\w./-]*)`, 'i');
-  return clean(text.slice(0, HEAD_SIZE).match(pattern)?.[1]) ?? clean(text.match(pattern)?.[1]);
+  const raw = text.slice(0, HEAD_SIZE).match(pattern)?.[1] ?? text.match(pattern)?.[1];
+  // "CONTRATO Nº 045/2026." no fim de frase — o ponto final não faz parte do número.
+  return clean(raw?.replace(/[.,;:]+$/, '')) ?? null;
 };
 
 const extractNumeroProcesso = (text: string): string | null => {
