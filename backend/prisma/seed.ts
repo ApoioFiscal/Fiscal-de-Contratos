@@ -5,62 +5,35 @@ import { prisma } from '../src/prisma/client';
 async function main() {
   console.log('Iniciando o seed do banco de dados...');
 
-  // Garante que o setor Gabinete exista
   const setorGabinete = await prisma.setor.upsert({
     where: { sigla: 'GAB' },
     update: { tipo: TipoSetor.GABINETE },
-    create: {
-      nome: 'Gabinete do Prefeito',
-      sigla: 'GAB',
-      tipo: TipoSetor.GABINETE,
-    },
+    create: { nome: 'Gabinete do Prefeito', sigla: 'GAB', tipo: TipoSetor.GABINETE },
   });
 
-  // Garante que o setor de Licitações exista (setor administrativo, não secretaria)
   const setorLicitacoes = await prisma.setor.upsert({
     where: { sigla: 'LIC' },
     update: { tipo: TipoSetor.SETOR },
-    create: {
-      nome: 'Setor de Licitações',
-      sigla: 'LIC',
-      tipo: TipoSetor.SETOR,
-    },
+    create: { nome: 'Setor de Licitações', sigla: 'LIC', tipo: TipoSetor.SETOR },
   });
 
-  // Garante que o setor de Fiscalização de Contratos exista
   const setorFiscalizacao = await prisma.setor.upsert({
     where: { sigla: 'FCON' },
     update: { tipo: TipoSetor.SETOR },
-    create: {
-      nome: 'Fiscalização de Contratos',
-      sigla: 'FCON',
-      tipo: TipoSetor.SETOR,
-    },
+    create: { nome: 'Fiscalização de Contratos', sigla: 'FCON', tipo: TipoSetor.SETOR },
   });
 
-  // Garante que o setor de Compras exista (opera o fluxo dos pedidos)
   const setorCompras = await prisma.setor.upsert({
     where: { sigla: 'CMP' },
     update: { tipo: TipoSetor.SETOR },
-    create: {
-      nome: 'Setor de Compras',
-      sigla: 'CMP',
-      tipo: TipoSetor.SETOR,
-    },
+    create: { nome: 'Setor de Compras', sigla: 'CMP', tipo: TipoSetor.SETOR },
   });
 
-  // Cria a senha criptografada (padrão 123456)
   const senhaHash = await bcrypt.hash('123456', 12);
 
-  // Garante que o Super Usuário exista
   const superAdmin = await prisma.usuario.upsert({
     where: { email: 'admin@marizopolis.gov.br' },
-    update: {
-      // Se o usuário já existir, garante que ele tenha poder total
-      funcao: FuncaoUsuario.PREFEITO,
-      isAdmin: true,
-      idSetor: setorGabinete.id,
-    },
+    update: { funcao: FuncaoUsuario.PREFEITO, isAdmin: true, idSetor: setorGabinete.id },
     create: {
       nome: 'Prefeito',
       email: 'admin@marizopolis.gov.br',
@@ -71,13 +44,9 @@ async function main() {
     },
   });
 
-  // Usuário de teste do setor de Compras (opera os pedidos até a chegada)
   const usuarioCompras = await prisma.usuario.upsert({
     where: { email: 'compras@marizopolis.gov.br' },
-    update: {
-      funcao: FuncaoUsuario.SECRETARIO,
-      idSetor: setorCompras.id,
-    },
+    update: { funcao: FuncaoUsuario.SECRETARIO, idSetor: setorCompras.id },
     create: {
       nome: 'Compras',
       email: 'compras@marizopolis.gov.br',
@@ -88,95 +57,83 @@ async function main() {
     },
   });
 
-  // Garante um contrato de exemplo com itens, para desenvolvimento das telas
-  const anoBase = new Date().getFullYear();
-  const fimVigencia = new Date();
-  fimVigencia.setMonth(fimVigencia.getMonth() + 12);
-
   // Beneficiárias dos contratos de exemplo: FCON + todas as secretarias que o
-  // gabinete já cadastrou (nada é fixado no seed — quem cadastra secretaria é
+  // gabinete cadastrou (nada é fixo no seed — quem cadastra secretaria é
   // o gabinete, e ela automaticamente passa a ser beneficiária dos exemplos).
   const secretariasCadastradas = await prisma.setor.findMany({
     where: { sigla: { notIn: ['GAB', 'LIC', 'FCON', 'CMP'] } },
     select: { id: true },
   });
   const vincularSetores = [setorFiscalizacao.id, ...secretariasCadastradas.map((s) => s.id)].map(
-    (idSetor) => ({ idSetor })
+    (idSetor) => ({ idSetor }),
   );
 
-  const contratoExemplo = await prisma.licitacaoContrato.upsert({
-    where: { numero: `LIC-${anoBase}-001` },
+  // Contrato real: extraído do PDF assinado (processo 260803DV00014, contrato
+  // 00141/2026-SDC) pelo serviço de parsing. Nasce como RASCUNHO — "importado,
+  // aguardando revisão".
+  const contratoExemplo = await prisma.contrato.upsert({
+    where: { numero: '00141/2026-SDC' },
     update: {},
     create: {
-      numero: `LIC-${anoBase}-001`,
-      numeroProcesso: `PRC-${anoBase}/001`,
-      modalidade: 'PREGÃO ELETRÔNICO',
-      objeto: 'Fornecimento de Medicamentos Gerais',
-      fornecedor: 'MedTech Distribuidora LTDA',
-      cnpjFornecedor: '12.345.678/0001-90',
-      dataAbertura: new Date(),
-      dataVigenciaFim: fimVigencia,
-      status: StatusContrato.ATIVA,
-      valorTotal: 214500,
-      itens: {
-        create: [
-          {
-            descricao: 'Dipirona 500mg',
-            marca: 'NeoQuímica',
-            unidade: 'Cx',
-            quantidade: 10000,
-            precoUnitario: 15.5,
-            precoTotal: 155000,
-          },
-          {
-            descricao: 'Paracetamol 750mg',
-            marca: 'Genérico',
-            unidade: 'Cx',
-            quantidade: 5000,
-            precoUnitario: 11.9,
-            precoTotal: 59500,
-          },
-        ],
-      },
-      setores: {
-        create: vincularSetores,
-      },
-    },
-  });
-
-  // Licitação de exemplo com contrato ainda não gerado
-  // (status RASCUNHO — aguarda o LIC clicar em "Gerar Contrato")
-  const licitacaoPendente = await prisma.licitacaoContrato.upsert({
-    where: { numero: `LIC-${anoBase}-002` },
-    update: {},
-    create: {
-      numero: `LIC-${anoBase}-002`,
-      numeroProcesso: `PRC-${anoBase}/002`,
-      modalidade: 'PREGÃO ELETRÔNICO',
-      objeto: 'Aquisição de Equipamentos de Informática',
-      fornecedor: 'InfoStore Comércio de Tecnologia LTDA',
-      cnpjFornecedor: '98.765.432/0001-10',
-      dataAbertura: new Date(),
-      dataVigenciaFim: fimVigencia,
+      numero: '00141/2026-SDC',
+      numeroProcesso: '260803DV00014',
+      modalidade: 'Dispensa de Licitação',
+      numeroModalidade: 'DV00014/2026',
+      objeto:
+        'CONTRATAÇÃO DE EMPRESA ESPECIALIZADA PARA A CONFECÇÃO, FORNECIMENTO E INSTALAÇÃO DE PLACAS DE COMUNICAÇÃO VISUAL, DESTINADAS AO ATENDIMENTO DA. , NECESSIDADES DA PREFEITURA MUNICIPAL DE MARIZÓPOLIS/PB, COMPREENDENDO A PRODUÇÃO DE PLACAS EM ACM, ACRÍLICO, PVC EXPANDIDO E DEMAIS MATERIAIS DE COMUNICAÇÃO VISUAL, INCLUINDO INSTALAÇÃO NOS LOCAIS INDICADOS PELA ADMINISTRAÇÃO.',
+      valorTotal: 37135,
+      vigenciaInicio: new Date('2026-08-19'),
+      vigenciaFim: new Date('2026-12-31'),
+      vigenciaFimCalculada: false,
+      vigenciaTrecho: 'vigência do presente contrato será determinada: até 31 de dezembro de 2026, considerada da data de sua assinatura',
+      foro: 'Sousa',
       status: StatusContrato.RASCUNHO,
-      valorTotal: 84500,
       itens: {
         create: [
           {
-            descricao: 'Notebook 16GB RAM',
-            marca: 'Dell',
-            unidade: 'Un',
-            quantidade: 20,
-            precoUnitario: 3600,
-            precoTotal: 72000,
+            codigo: 1,
+            descricao: 'PLACA EM ACM COM ESTRUTURA METÁLICA GALVANIZADA COM INSTALAÇÃO NO LOCAL.',
+            unidade: 'm²',
+            unidadeOriginal: 'M2',
+            quantidade: 50,
+            valorUnitario: 289,
+            valorTotal: 14450,
           },
           {
-            descricao: 'Monitor 24"',
-            marca: 'LG',
-            unidade: 'Un',
+            codigo: 2,
+            descricao: 'PLACA EM ACM COM ILUMINAÇÃO INTERNA, ESTRUTURA METÁLICA GALVANIZADA COM INSTALAÇÃO NO LOCAL.',
+            unidade: 'm²',
+            unidadeOriginal: 'M2',
             quantidade: 10,
-            precoUnitario: 1250,
-            precoTotal: 12500,
+            valorUnitario: 859,
+            valorTotal: 8590,
+          },
+          {
+            codigo: 3,
+            descricao: 'ACRILICO EM DIVERSAS CORES E TAMANIIOS 3MM.',
+            unidade: 'm²',
+            unidadeOriginal: 'N42',
+            quantidade: 10,
+            valorUnitario: 267,
+            valorTotal: 2670,
+          },
+          {
+            codigo: 4,
+            descricao: 'PVC EXPANDIDO 20 MM COM PINTURA AUTOMOTIVA E INSTALAÇÃO NO LOCAL.',
+            unidade: 'm²',
+            unidadeOriginal: 'M2',
+            quantidade: 15,
+            valorUnitario: 497,
+            valorTotal: 7455,
+          },
+          {
+            codigo: 5,
+            descricao: 'PVC EXPANDIDO 10 MM COM PINTURA AUTOMOTIVA E INSTALAÇÃO NO LOCAL.',
+            unidade: 'm²',
+            unidadeOriginal: 'M2',
+            quantidade: 10,
+            valorUnitario: 397,
+            valorTotal: 3970,
           },
         ],
       },
@@ -186,21 +143,20 @@ async function main() {
     },
   });
 
-  // Garante as beneficiárias dos contratos de exemplo (FCON + secretarias que o
+  // Garante as beneficiárias do contrato de exemplo (FCON + secretarias que o
   // gabinete cadastrou). Feito após o upsert para funcionar também em banco já
   // existente (o upsert tem update vazio e não alteraria). delete → create em
   // passos separados evita conflito de unicidade e ao menos uma vez é idempotente.
-  for (const exemplo of [contratoExemplo, licitacaoPendente]) {
-    await prisma.licitacaoSetor.deleteMany({ where: { idLicitacao: exemplo.id } });
-    await prisma.licitacaoSetor.createMany({
-      data: vincularSetores.map((v) => ({ ...v, idLicitacao: exemplo.id })),
+  for (const exemplo of [contratoExemplo]) {
+    await prisma.contratoSetor.deleteMany({ where: { idContrato: exemplo.id } });
+    await prisma.contratoSetor.createMany({
+      data: vincularSetores.map((v) => ({ ...v, idContrato: exemplo.id })),
     });
   }
 
-  console.log('✅ Seed finalizado! Super Usuário garantido:', superAdmin.email);
-  console.log('✅ Usuário de compras garantido:', usuarioCompras.email);
-  console.log('✅ Contrato de exemplo garantido:', contratoExemplo.numero);
-  console.log('✅ Licitação pendente de contrato:', licitacaoPendente.numero);
+  console.log('Seed finalizado! Super Usuário garantido:', superAdmin.email);
+  console.log('Usuário de compras garantido:', usuarioCompras.email);
+  console.log('Contrato de exemplo garantido:', contratoExemplo.numero);
 }
 
 main()
