@@ -4,6 +4,7 @@ import {
   importarContratoArquivo,
   atualizarContrato,
   baixarArquivoContrato,
+  excluirContrato,
 } from "@/services/contratos";
 import { obterSessao } from "@/services/auth";
 import { format, parseISO, differenceInDays } from "date-fns";
@@ -100,6 +101,17 @@ export function Contracts() {
       setSwalError(err instanceof Error ? err.message : "Erro ao confirmar a revisão do contrato.");
     } finally {
       setConfirmandoId(null);
+    }
+  };
+
+  const handleExcluir = async (contrato: Contrato) => {
+    if (!window.confirm(`Excluir o contrato ${contrato.numero}? Esta acao nao pode ser desfeita.`)) return;
+    setSwalError(null);
+    try {
+      await excluirContrato(contrato.id);
+      await reload();
+    } catch (err) {
+      setSwalError(err instanceof Error ? err.message : "Nao foi possivel excluir o contrato.");
     }
   };
 
@@ -290,6 +302,15 @@ export function Contracts() {
                         >
                           <FileDown className="w-4 h-4" />
                           Baixar PDF
+                        </button>
+                      )}
+                      {podeCriar && (
+                        <button
+                          onClick={() => void handleExcluir(c)}
+                          className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium text-rose-700 bg-white border border-rose-300 hover:bg-rose-50 transition-colors"
+                        >
+                          <X className="w-4 h-4" />
+                          Excluir
                         </button>
                       )}
                       {c.status === "RASCUNDO" && !podeCriar && (

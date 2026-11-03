@@ -34,6 +34,26 @@ export class ContratoRepository {
     });
   }
 
+  async delete(id: number) {
+    const existe = await prisma.contrato.findUnique({ where: { id }, select: { id: true } });
+    if (!existe) throw new NotFoundError("Contrato");
+
+    await prisma.$transaction(async (tx) => {
+      await tx.termoRenovacao.deleteMany({ where: { idContrato: id } });
+      await tx.avaliacao.deleteMany({ where: { idContrato: id } });
+      await tx.notaFiscalItem.deleteMany({ where: { notaFiscal: { idContrato: id } } });
+      await tx.notaFiscal.deleteMany({ where: { idContrato: id } });
+      await tx.movimentacaoEstoque.deleteMany({ where: { itemContrato: { idContrato: id } } });
+      await tx.pedidoItem.deleteMany({ where: { pedido: { idContrato: id } } });
+      await tx.pedido.deleteMany({ where: { idContrato: id } });
+      await tx.contratoSetor.deleteMany({ where: { idContrato: id } });
+      await tx.contratoDotacao.deleteMany({ where: { idContrato: id } });
+      await tx.contratoItem.deleteMany({ where: { idContrato: id } });
+      await tx.contratoSignatario.deleteMany({ where: { idContrato: id } });
+      await tx.contratoParte.deleteMany({ where: { idContrato: id } });
+      await tx.contrato.delete({ where: { id } });
+    });
+  }
   async findByNumero(numero: string) {
     return prisma.contrato.findUnique({ where: { numero } });
   }

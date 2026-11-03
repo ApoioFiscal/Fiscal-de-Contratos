@@ -33,6 +33,10 @@ export class ContratoController {
     sendSuccess(res, contrato);
   }
 
+  async delete(req: Request, res: Response): Promise<void> {
+    await this.service.delete(Number(req.params.id));
+    sendSuccess(res, { id: Number(req.params.id), deleted: true });
+  }
   async download(req: Request, res: Response): Promise<void> {
     res.status(501).json({
       success: false,

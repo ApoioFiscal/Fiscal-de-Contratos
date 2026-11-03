@@ -62,6 +62,9 @@ export class ContratoService {
     return this.repository.findByNumero(numero);
   }
 
+  async delete(id: number) {
+    await this.repository.delete(id);
+  }
   async atualizar(id: number, input: AtualizarContratoInput) {
     const contrato = await this.repository.atualizar(id, input);
     return contrato;

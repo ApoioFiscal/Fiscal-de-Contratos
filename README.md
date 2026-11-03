@@ -6,11 +6,11 @@ Sistema de gestão de **licitações, contratos e pedidos** de uma prefeitura mu
 
 O projeto é dividido em **três pacotes independentes**, cada um com seu `package.json`:
 
-| Pasta      | Descrição                                                        | Porta |
-| ---------- | ---------------------------------------------------------------- | ----- |
-| `backend/` | API `apoiofiscal` — Express 5 + Prisma 7 (auth, setores, usuários, licitações, pedidos, estoque, avaliações, renovações, geração de contrato). Serve sob `/api`. | **3333** |
-| `frontend/`| Interface React 18 + Vite + MUI/Radix + Tailwind (ESM).           | **5173** |
-| `parsing/` | API de extração de dados de PDFs (Express 5 + pg, regras ou Ollama). Rotas em `/upload`, `/health` e `/` (não usam `/api`). | **3000** |
+| Pasta         | Descrição                                                                                                                                                                    | Porta          |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------- |
+| `backend/`  | API `apoiofiscal` — Express 5 + Prisma 7 (auth, setores, usuários, licitações, pedidos, estoque, avaliações, renovações, geração de contrato). Serve sob `/api`. | **3333** |
+| `frontend/` | Interface React 18 + Vite + MUI/Radix + Tailwind (ESM).                                                                                                                        | **5173** |
+| `parsing/`  | API de extração de dados de PDFs (Express 5 + pg, regras ou Ollama). Rotas em `/upload`, `/health` e `/` (não usam `/api`).                                         | **3000** |
 
 Não há workspace no npm: cada comando é executado dentro da pasta de cada pacote (use `npm --prefix <pasta> ...` a partir da raiz).
 
@@ -82,19 +82,19 @@ npm --prefix backend run seed
 
 ## Comandos úteis
 
-| Ação                          | Comando                                                     |
-| ----------------------------- | ----------------------------------------------------------- |
-| Instalar tudo (raiz)          | `npm run install:all`                                       |
-| Rodar tudo (raiz)             | `npm run dev`                                               |
-| Build de todos                | `npm run build` (na raiz)                                   |
-| Build do backend              | `cd backend && npm run build` (tsc)                        |
-| Build do frontend             | `cd frontend && npm run build` (vite build)                |
-| Build do parsing              | `cd parsing && npm run build`                               |
-| Testes do parsing             | `cd parsing && npm test`                                    |
-| Testes E2E (Playwright)       | `cd frontend && npm run test:e2e` (sobe backend:3333 + vite:5173) |
-| Sync do schema (backend)      | `cd backend && npx prisma db push`                          |
-| Seed (backend)                | `cd backend && npx ts-node-dev --transpile-only prisma/seed.ts` |
-| Init da tabela do parsing     | `cd parsing && npm run db:init`                             |
+| Ação                    | Comando                                                             |
+| ------------------------- | ------------------------------------------------------------------- |
+| Instalar tudo (raiz)      | `npm run install:all`                                             |
+| Rodar tudo (raiz)         | `npm run dev`                                                     |
+| Build de todos            | `npm run build` (na raiz)                                         |
+| Build do backend          | `cd backend && npm run build` (tsc)                               |
+| Build do frontend         | `cd frontend && npm run build` (vite build)                       |
+| Build do parsing          | `cd parsing && npm run build`                                     |
+| Testes do parsing         | `cd parsing && npm test`                                          |
+| Testes E2E (Playwright)   | `cd frontend && npm run test:e2e` (sobe backend:3333 + vite:5173) |
+| Sync do schema (backend)  | `cd backend && npx prisma db push`                                |
+| Seed (backend)            | `cd backend && npx ts-node-dev --transpile-only prisma/seed.ts`   |
+| Init da tabela do parsing | `cd parsing && npm run db:init`                                   |
 
 > No Windows PowerShell, a política de restrição pode bloquear o `npm.ps1`; neste caso use `cmd /c npm ...`.
 

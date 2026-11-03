@@ -17,7 +17,7 @@ const controller = new ContratoController(service);
 export const contratoRouter = Router();
 
 // Importa um PDF assinado: o backend faz o proxy para o parsing, valida com o Zod
-// (schema canônico do contrato real) e persiste no schema `contrato`.
+// (schema canï¿½nico do contrato real) e persiste no schema `contrato`.
 contratoRouter.post(
   "/importar",
   autenticationMiddleware,
@@ -48,4 +48,12 @@ contratoRouter.get(
   autenticationMiddleware,
   validateParams(IdParamSchema),
   asyncHandler(async (req, res) => controller.download(req, res)),
+);
+
+contratoRouter.delete(
+  "/:id",
+  autenticationMiddleware,
+  requerPerfil("licitacoes", "gabinete"),
+  validateParams(IdParamSchema),
+  asyncHandler(async (req, res) => controller.delete(req, res)),
 );

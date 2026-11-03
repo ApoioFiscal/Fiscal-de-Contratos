@@ -79,3 +79,7 @@ export async function baixarArquivoContrato(id: number): Promise<Blob> {
   }
   return response.blob();
 }
+
+export async function excluirContrato(id: number): Promise<void> {
+  await apiRequest<void>(`/contratos/${id}`, { method: "DELETE" });
+}
