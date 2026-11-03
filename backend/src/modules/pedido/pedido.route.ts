@@ -32,11 +32,12 @@ pedidoRouter.get(
   asyncHandler((req, res) => controller.findMeus(req, res))
 );
 
-// Fila de pedidos (apenas a Fiscalização de Contratos)
+// Fila de pedidos (Compras opera até a chegada; FCON confere e conclui).
+// A etapa exata de cada transição é validada no PedidoService, por perfil.
 pedidoRouter.get(
   "/fila",
   autenticationMiddleware,
-  requerPerfil("contratos", "fiscal"),
+  requerPerfil("compras", "contratos", "fiscal"),
   asyncHandler((req, res) => controller.findAll(req, res))
 );
 
@@ -48,11 +49,11 @@ pedidoRouter.get(
   asyncHandler((req, res) => controller.findById(req, res))
 );
 
-// Transição de status do pedido (apenas Fiscalização de Contratos)
+// Transição de status do pedido (Compras conduz o fluxo; FCON confere/conclui)
 pedidoRouter.patch(
   "/:id/status",
   autenticationMiddleware,
-  requerPerfil("contratos", "fiscal"),
+  requerPerfil("compras", "contratos", "fiscal"),
   validateParams(IdParamSchema),
   validateBody(AtualizarStatusPedidoSchema),
   asyncHandler((req, res) => controller.atualizarStatus(req, res))

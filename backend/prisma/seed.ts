@@ -1,4 +1,4 @@
-import { FuncaoUsuario, StatusContrato } from '@prisma/client';
+import { FuncaoUsuario, StatusContrato, TipoSetor } from '@prisma/client';
 import bcrypt from 'bcrypt';
 import { prisma } from '../src/prisma/client';
 
@@ -8,30 +8,44 @@ async function main() {
   // Garante que o setor Gabinete exista
   const setorGabinete = await prisma.setor.upsert({
     where: { sigla: 'GAB' },
-    update: {},
+    update: { tipo: TipoSetor.GABINETE },
     create: {
       nome: 'Gabinete do Prefeito',
       sigla: 'GAB',
+      tipo: TipoSetor.GABINETE,
     },
   });
 
-  // Garante que o setor de Licitações exista
+  // Garante que o setor de Licitações exista (setor administrativo, não secretaria)
   const setorLicitacoes = await prisma.setor.upsert({
     where: { sigla: 'LIC' },
-    update: {},
+    update: { tipo: TipoSetor.SETOR },
     create: {
-      nome: 'Secretaria de Licitações',
+      nome: 'Setor de Licitações',
       sigla: 'LIC',
+      tipo: TipoSetor.SETOR,
     },
   });
 
   // Garante que o setor de Fiscalização de Contratos exista
   const setorFiscalizacao = await prisma.setor.upsert({
     where: { sigla: 'FCON' },
-    update: {},
+    update: { tipo: TipoSetor.SETOR },
     create: {
       nome: 'Fiscalização de Contratos',
       sigla: 'FCON',
+      tipo: TipoSetor.SETOR,
+    },
+  });
+
+  // Garante que o setor de Compras exista (opera o fluxo dos pedidos)
+  const setorCompras = await prisma.setor.upsert({
+    where: { sigla: 'CMP' },
+    update: { tipo: TipoSetor.SETOR },
+    create: {
+      nome: 'Setor de Compras',
+      sigla: 'CMP',
+      tipo: TipoSetor.SETOR,
     },
   });
 
@@ -57,6 +71,23 @@ async function main() {
     },
   });
 
+  // Usuário de teste do setor de Compras (opera os pedidos até a chegada)
+  const usuarioCompras = await prisma.usuario.upsert({
+    where: { email: 'compras@marizopolis.gov.br' },
+    update: {
+      funcao: FuncaoUsuario.SECRETARIO,
+      idSetor: setorCompras.id,
+    },
+    create: {
+      nome: 'Compras',
+      email: 'compras@marizopolis.gov.br',
+      senha: senhaHash,
+      funcao: FuncaoUsuario.SECRETARIO,
+      isAdmin: false,
+      idSetor: setorCompras.id,
+    },
+  });
+
   // Garante um contrato de exemplo com itens, para desenvolvimento das telas
   const anoBase = new Date().getFullYear();
   const fimVigencia = new Date();
@@ -66,7 +97,7 @@ async function main() {
   // gabinete já cadastrou (nada é fixado no seed — quem cadastra secretaria é
   // o gabinete, e ela automaticamente passa a ser beneficiária dos exemplos).
   const secretariasCadastradas = await prisma.setor.findMany({
-    where: { sigla: { notIn: ['GAB', 'LIC', 'FCON'] } },
+    where: { sigla: { notIn: ['GAB', 'LIC', 'FCON', 'CMP'] } },
     select: { id: true },
   });
   const vincularSetores = [setorFiscalizacao.id, ...secretariasCadastradas.map((s) => s.id)].map(
@@ -167,6 +198,7 @@ async function main() {
   }
 
   console.log('✅ Seed finalizado! Super Usuário garantido:', superAdmin.email);
+  console.log('✅ Usuário de compras garantido:', usuarioCompras.email);
   console.log('✅ Contrato de exemplo garantido:', contratoExemplo.numero);
   console.log('✅ Licitação pendente de contrato:', licitacaoPendente.numero);
 }

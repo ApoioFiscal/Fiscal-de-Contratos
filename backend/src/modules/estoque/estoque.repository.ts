@@ -1,4 +1,4 @@
-import { StatusPedido, TipoMovimentacao } from "@prisma/client";
+import { TipoMovimentacao } from "@prisma/client";
 import { prisma } from "../../prisma/client";
 import { CreateBaixaInput, CreateNotaFiscalInput, EstoqueQuery } from "../../common/schemas";
 import { DuplicateDataError, NotFoundError, ValidationError } from "../../common/errors";
@@ -81,6 +81,7 @@ export class EstoqueRepository {
                 idItemLicitado: linha.idItemLicitado,
                 quantidade: linha.quantidade,
                 valorUnitario: linha.valorUnitario ?? linhaPedido.valorUnitario,
+                marcaConferida: linha.marcaConferida ?? false,
               };
             }),
           },
@@ -113,17 +114,9 @@ export class EstoqueRepository {
         });
       }
 
-      if (
-        pedido.status === StatusPedido.PENDENTE ||
-        pedido.status === StatusPedido.CONFIRMADO ||
-        pedido.status === StatusPedido.EFETUADO
-      ) {
-        await tx.pedido.update({
-          where: { id: pedido.id },
-          data: { status: StatusPedido.EFETUADO },
-        });
-      }
-
+      // A entrada de nota NÃO altera o status do pedido: no fluxo atual a NF é
+      // lançada pelo FCON quando o pedido já está ENTREGUE, e a conclusão é uma
+      // etapa explícita (PATCH /pedidos/:id/status).
       return nota;
     });
   }
