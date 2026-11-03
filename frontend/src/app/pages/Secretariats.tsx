@@ -2,6 +2,19 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router";
 import { Plus, Building2, User, Search, Trash2, ChevronRight } from "lucide-react";
 import { apiRequest, ApiError } from "@/services/api";
+import type { TipoSetor } from "@/types/auth";
+
+const TIPO_SETOR_LABEL: Record<TipoSetor, string> = {
+  GABINETE: "Gabinete",
+  SETOR: "Setor administrativo",
+  SECRETARIA: "Secretaria",
+};
+
+const TIPO_SETOR_CHIP: Record<TipoSetor, string> = {
+  GABINETE: "bg-violet-100 text-violet-800",
+  SETOR: "bg-blue-100 text-blue-800",
+  SECRETARIA: "bg-emerald-100 text-emerald-800",
+};
 
 export function Secretariats() {
   const navigate = useNavigate();
@@ -12,6 +25,7 @@ export function Secretariats() {
   const [isAddSecretariatModalOpen, setIsAddSecretariatModalOpen] = useState(false);
   const [newSecretariatName, setNewSecretariatName] = useState("");
   const [newSecretariatSigla, setNewSecretariatSigla] = useState("");
+  const [newSecretariatTipo, setNewSecretariatTipo] = useState<TipoSetor>("SECRETARIA");
 
   // States para Secretaries (Usuários)
   const [secretaries, setSecretaries] = useState<any[]>([]);
@@ -30,12 +44,13 @@ export function Secretariats() {
 
         setSecretariats(
           setores
-            .filter((s: any) => s.sigla !== "GAB") // Ignora o Gabinete
+            .filter((s: any) => s.tipo !== "GABINETE" && s.sigla !== "GAB") // Ignora o Gabinete
             .map((s: any) => ({
               ...s,
               id: String(s.id),
               name: s.nome || s.name,
               sigla: s.sigla || "",
+              tipo: (s.tipo || "SECRETARIA") as TipoSetor,
             }))
         );
 
@@ -69,6 +84,7 @@ export function Secretariats() {
         body: JSON.stringify({
           nome: newSecretariatName.trim(),
           sigla: newSecretariatSigla.trim().toUpperCase(),
+          tipo: newSecretariatTipo,
         }),
       });
 
@@ -77,9 +93,11 @@ export function Secretariats() {
         id: String(novoSetor.id),
         name: novoSetor.nome || novoSetor.name,
         sigla: novoSetor.sigla,
+        tipo: (novoSetor.tipo || newSecretariatTipo) as TipoSetor,
       }]);
       setNewSecretariatName("");
       setNewSecretariatSigla("");
+      setNewSecretariatTipo("SECRETARIA");
       setIsAddSecretariatModalOpen(false);
     } catch (error) {
       console.error("Erro ao criar secretaria:", error);
@@ -166,9 +184,9 @@ export function Secretariats() {
     <div className="space-y-6 max-w-6xl mx-auto">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Gestão de Secretarias</h1>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Gestão de Setores e Secretarias</h1>
           <p className="text-sm text-slate-500 mt-1">
-            Gerencie as secretarias e seus respectivos responsáveis
+            Gerencie as secretarias, os setores administrativos e seus respectivos responsáveis
           </p>
         </div>
         <div className="flex gap-3">
@@ -178,7 +196,7 @@ export function Secretariats() {
               className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-xl hover:bg-blue-700 transition-colors shadow-sm font-medium text-sm"
             >
               <Plus className="w-4 h-4" />
-              Nova Secretaria
+              Nova Unidade
             </button>
           ) : (
             <button
@@ -203,7 +221,7 @@ export function Secretariats() {
             >
               <div className="flex items-center gap-2">
                 <Building2 className="w-4 h-4" />
-                Secretarias
+                Setores e Secretarias
               </div>
               {activeTab === "secretarias" && (
                 <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 rounded-t-full" />
@@ -234,7 +252,7 @@ export function Secretariats() {
                 type="text"
                 value={search}
                 onChange={e => setSearch(e.target.value)}
-                placeholder={`Buscar ${activeTab === "secretarias" ? "secretaria" : "secretário"}...`}
+                placeholder={`Buscar ${activeTab === "secretarias" ? "setor ou secretaria" : "responsável"}...`}
                 className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm transition-all"
               />
             </div>
@@ -246,8 +264,9 @@ export function Secretariats() {
                 <thead>
                   <tr className="border-b border-slate-200 text-slate-500">
                     <th className="pb-3 font-medium">ID</th>
-                    <th className="pb-3 font-medium">Nome da Secretaria</th>
-                    <th className="pb-3 font-medium">Secretário Vinculado</th>
+                    <th className="pb-3 font-medium">Nome</th>
+                    <th className="pb-3 font-medium">Tipo</th>
+                    <th className="pb-3 font-medium">Responsável Vinculado</th>
                     <th className="pb-3 font-medium text-right">Ações</th>
                   </tr>
                 </thead>
@@ -268,13 +287,18 @@ export function Secretariats() {
                           </div>
                         </td>
                         <td className="py-4">
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${TIPO_SETOR_CHIP[sec.tipo as TipoSetor] ?? TIPO_SETOR_CHIP.SECRETARIA}`}>
+                            {TIPO_SETOR_LABEL[sec.tipo as TipoSetor] ?? TIPO_SETOR_LABEL.SECRETARIA}
+                          </span>
+                        </td>
+                        <td className="py-4">
                           {linkedSecretary ? (
                             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">
-                              {linkedSecretary.name} {/* NOME do secretário */}
+                              {linkedSecretary.name} {/* NOME do responsável */}
                             </span>
                           ) : (
                             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-500">
-                              Sem secretário
+                              Sem responsável
                             </span>
                           )}
                         </td>
@@ -293,8 +317,8 @@ export function Secretariats() {
                   })}
                   {filteredSecretariats.length === 0 && (
                     <tr>
-                      <td colSpan={4} className="py-8 text-center text-slate-500">
-                        Nenhuma secretaria encontrada.
+                      <td colSpan={5} className="py-8 text-center text-slate-500">
+                        Nenhum setor ou secretaria encontrado.
                       </td>
                     </tr>
                   )}
@@ -306,7 +330,7 @@ export function Secretariats() {
                   <tr className="border-b border-slate-200 text-slate-500">
                     <th className="pb-3 font-medium">Nome</th>
                     <th className="pb-3 font-medium">E-mail</th>
-                    <th className="pb-3 font-medium">Secretaria Vinculada</th>
+                    <th className="pb-3 font-medium">Setor Vinculado</th>
                     <th className="pb-3 font-medium text-right">Ações</th>
                   </tr>
                 </thead>
@@ -354,13 +378,30 @@ export function Secretariats() {
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
             <div className="px-6 py-4 border-b border-slate-200">
-              <h3 className="text-lg font-semibold text-slate-900">Nova Secretaria</h3>
+              <h3 className="text-lg font-semibold text-slate-900">Nova Unidade</h3>
             </div>
             <form onSubmit={handleAddSecretariat} className="p-6">
               <div className="space-y-4">
                 <div>
+                  <label htmlFor="secTipo" className="block text-sm font-medium text-slate-700 mb-1">
+                    Tipo
+                  </label>
+                  <select
+                    id="secTipo"
+                    value={newSecretariatTipo}
+                    onChange={(e) => setNewSecretariatTipo(e.target.value as TipoSetor)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-sm bg-white"
+                  >
+                    <option value="SECRETARIA">Secretaria</option>
+                    <option value="SETOR">Setor administrativo</option>
+                  </select>
+                  <p className="text-xs text-slate-400 mt-1">
+                    Setores administrativos (Licitações, Compras, Fiscalização) não são beneficiários de contratos.
+                  </p>
+                </div>
+                <div>
                   <label htmlFor="secName" className="block text-sm font-medium text-slate-700 mb-1">
-                    Nome da Secretaria
+                    Nome
                   </label>
                   <input
                     id="secName"
@@ -374,7 +415,7 @@ export function Secretariats() {
                 </div>
                 <div>
                   <label htmlFor="secSigla" className="block text-sm font-medium text-slate-700 mb-1">
-                    Sigla da Secretaria
+                    Sigla
                   </label>
                   <input
                     id="secSigla"
@@ -390,7 +431,7 @@ export function Secretariats() {
               <div className="mt-6 flex justify-end gap-3">
                 <button
                   type="button"
-                  onClick={() => setIsAddSecretariatModalOpen(false)}
+                  onClick={() => { setIsAddSecretariatModalOpen(false); setNewSecretariatTipo("SECRETARIA"); }}
                   className="px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 rounded-xl transition-colors"
                 >
                   Cancelar
@@ -399,7 +440,7 @@ export function Secretariats() {
                   type="submit"
                   className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-colors shadow-sm"
                 >
-                  Salvar Secretaria
+                  Salvar
                 </button>
               </div>
             </form>
@@ -446,7 +487,7 @@ export function Secretariats() {
                 </div>
                 <div>
                   <label htmlFor="secretariatId" className="block text-sm font-medium text-slate-700 mb-1">
-                    Vincular à Secretaria
+                    Vincular ao Setor/Secretaria
                   </label>
                   <select
                     id="secretariatId"
@@ -455,7 +496,7 @@ export function Secretariats() {
                     onChange={(e) => { setSecretaryError(""); setNewSecretary({ ...newSecretary, secretariatId: e.target.value }); }}
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-sm bg-white"
                   >
-                    <option value="">Selecione uma secretaria...</option>
+                    <option value="">Selecione um setor...</option>
                     {secretariats
                       .filter(sec => !assignedSecretariatIds.has(String(sec.id)))
                       .map(sec => (
@@ -464,7 +505,7 @@ export function Secretariats() {
                     }
                   </select>
                   {secretariats.filter(sec => !assignedSecretariatIds.has(String(sec.id))).length === 0 && (
-                    <p className="text-xs text-amber-600 mt-1">Todas as secretarias já possuem um secretário vinculado.</p>
+                    <p className="text-xs text-amber-600 mt-1">Todas as unidades já possuem um responsável vinculado.</p>
                   )}
                   {secretaryError && (
                     <p className="text-xs text-red-600 mt-1">{secretaryError}</p>

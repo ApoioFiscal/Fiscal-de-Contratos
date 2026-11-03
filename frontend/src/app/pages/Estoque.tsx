@@ -24,7 +24,7 @@ const fmt = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" 
 
 export function Estoque() {
   const sessao = obterSessao();
-  const podeOperar = sessao?.perfil === "contratos" || sessao?.perfil === "fiscal" || sessao?.perfil === "gabinete";
+  const podeOperar = sessao?.perfil === "contratos" || sessao?.perfil === "fiscal";
 
   const [contratos, setContratos] = useState<Licitacao[]>([]);
   const [idContrato, setIdContrato] = useState<number | "">("");
@@ -204,7 +204,7 @@ export function Estoque() {
           {podeOperar && idContrato !== "" && (
             isEntradaOpen ? (
               <EntradaNotaModal
-                pedidos={pedidos.filter((p) => p.idContrato === Number(idContrato) && ["EM_COMPRA", "ENTREGUE"].includes(p.status))}
+                pedidos={pedidos.filter((p) => p.idContrato === Number(idContrato) && ["ENTREGUE", "CONCLUIDO"].includes(p.status))}
                 contratos={contratos}
                 onCancel={() => setIsEntradaOpen(false)}
                 onSalvar={async (payload: EntradaNotaPayload, id: number) => {
