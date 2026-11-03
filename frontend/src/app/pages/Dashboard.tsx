@@ -48,6 +48,9 @@ export function Dashboard() {
   const podeVerTermos =
     sessao?.perfil === "licitacoes" || sessao?.perfil === "gabinete";
 
+  // O Fiscal de Contratos só atua sobre o que o Compras entregou.
+  const podeConferir = sessao?.perfil === "contratos" || sessao?.perfil === "fiscal";
+
   useEffect(() => {
     listarLicitacoes()
       .then(setLicitacoes)
@@ -79,8 +82,10 @@ export function Dashboard() {
   const stats = [
     { label: "Licitações Ativas", value: licitacoes.filter((l) => l.status === "ATIVA").length, icon: PackageSearch, color: "text-blue-600" },
     {
-      label: "Pedidos em Andamento",
-      value: pedidos.filter((p) => ["PENDENTE", "CONFIRMADO", "EFETUADO", "ENTREGUE"].includes(p.status)).length,
+      label: podeConferir ? "Aguardando Conferência" : "Pedidos em Andamento",
+      value: podeConferir
+        ? pedidos.filter((p) => p.status === "ENTREGUE").length
+        : pedidos.filter((p) => ["PENDENTE", "CONFIRMADO", "EFETUADO", "ENTREGUE"].includes(p.status)).length,
       icon: TrendingUp,
       color: "text-emerald-600",
     },

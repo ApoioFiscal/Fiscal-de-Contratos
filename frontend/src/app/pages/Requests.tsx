@@ -105,6 +105,7 @@ export function Requests() {
   const [avisoPedido, setAvisoPedido] = useState<Pedido | null>(null);
 
   const [obsAberto, setObsAberto] = useState<number | null>(null);
+  const [historicoAberto, setHistoricoAberto] = useState(false);
 
   const [saldos, setSaldos] = useState<ItemSaldo[]>([]);
   const [movs, setMovs] = useState<Movimentacao[]>([]);
@@ -157,7 +158,24 @@ export function Requests() {
     !STATUS_TERMINAL.includes(p.status) &&
     isAfter(startOfToday(), parseISO(p.dataPrevistaEntrega!));
 
-  const filtered = pedidos
+  const pedidosEntregues = pedidos.filter((p) => p.status === "ENTREGUE");
+  const pedidosConferidos = pedidos.filter((p) => p.status === "CONCLUIDO");
+  // O Compras enxerga a fila inteira por etapa; o Fiscal recebe apenas o que
+  // chegou (ENTREGUE) para conferir, mais o histórico do que já conferiu.
+  const pedidosBase = podeConferir ? pedidosEntregues : pedidos;
+
+  const combinaBusca = (p: Pedido) => {
+    const termo = searchTerm.toLowerCase();
+    if (!termo) return true;
+    return (
+      p.numeroPedido.toLowerCase().includes(termo) ||
+      (p.setor?.nome || "").toLowerCase().includes(termo) ||
+      (p.contrato?.numero || "").toLowerCase().includes(termo) ||
+      (p.contrato?.fornecedor || "").toLowerCase().includes(termo)
+    );
+  };
+
+  const filtered = pedidosBase
     .filter((p) => {
       if (filtroStatus !== "TODOS" && p.status !== filtroStatus) return false;
       if (filtroSetor !== "TODOS" && p.setor?.id !== Number(filtroSetor)) return false;
@@ -166,20 +184,19 @@ export function Requests() {
         const fim = parseISO(dataAte).setHours(23, 59, 59, 999);
         if (isAfter(parseISO(p.dataPedido).getTime(), fim)) return false;
       }
-      const termo = searchTerm.toLowerCase();
-      if (!termo) return true;
-      return (
-        p.numeroPedido.toLowerCase().includes(termo) ||
-        (p.setor?.nome || "").toLowerCase().includes(termo) ||
-        (p.contrato?.numero || "").toLowerCase().includes(termo) ||
-        (p.contrato?.fornecedor || "").toLowerCase().includes(termo)
-      );
+      return combinaBusca(p);
     })
     .sort((a, b) =>
       ordem === "recentes"
         ? parseISO(b.dataPedido).getTime() - parseISO(a.dataPedido).getTime()
         : parseISO(a.dataPedido).getTime() - parseISO(b.dataPedido).getTime()
     );
+
+  const conferidosFiltrados = podeConferir
+    ? pedidosConferidos
+        .filter(combinaBusca)
+        .sort((a, b) => parseISO(b.dataPedido).getTime() - parseISO(a.dataPedido).getTime())
+    : [];
 
   const contagemPorStatus = (status: FiltroStatus) =>
     status === "TODOS" ? pedidos.length : pedidos.filter((p) => p.status === status).length;
@@ -288,10 +305,6 @@ export function Requests() {
       );
 
       switch (pedido.status) {
-        case "PENDENTE":
-        case "CONFIRMADO":
-        case "EFETUADO":
-          return [aviso];
         case "ENTREGUE":
           return [
             btn("Conferir e Concluir", ClipboardCheck, "bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border-emerald-200", "conferir"),
@@ -350,7 +363,7 @@ export function Requests() {
             {podeExecutar
               ? "Fila de compras: registre a compra, efetive e informe a chegada dos itens."
               : podeConferir
-                ? "Conferência final: lance a nota fiscal, confira quantidades e marcas e conclua o pedido."
+                ? "Pedidos entregues pelo Compras aguardando conferência — lance a nota fiscal, confira quantidades e marcas e devolva a relação ao Compras."
                 : "Solicitações do seu setor, prazos e avisos da Fiscalização."}
           </p>
         </div>
@@ -375,7 +388,7 @@ export function Requests() {
         </div>
       )}
 
-      {podeOperar && (
+      {podeExecutar && (
         <div className="flex flex-wrap gap-2">
           <button
             onClick={() => setFiltroStatus("TODOS")}
@@ -411,7 +424,7 @@ export function Requests() {
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
-          {podeOperar && (
+          {podeExecutar && (
             <>
               <select
                 value={filtroSetor}
@@ -507,6 +520,13 @@ export function Requests() {
                       {podeExecutar
                         ? "A Fiscalização registrou um aviso/divergência — verifique a timeline e contate o fornecedor."
                         : "Há avisos da Fiscalização neste pedido — confira a timeline."}
+                    </div>
+                  )}
+
+                  {podeExecutar && pedido.status === "ENTREGUE" && (
+                    <div className="mt-2 flex items-center gap-2 text-xs text-cyan-800 bg-cyan-50 border border-cyan-200 rounded-lg px-3 py-1.5">
+                      <ClipboardCheck className="w-4 h-4 shrink-0" />
+                      Entregue — aguardando conferência da Fiscalização de Contratos.
                     </div>
                   )}
 
@@ -703,9 +723,77 @@ export function Requests() {
               </div>
             );
           })}
-          {!loading && filtered.length === 0 && <div className="p-8 text-center text-slate-500">Nenhum pedido encontrado.</div>}
+          {!loading && filtered.length === 0 && (
+            <div className="p-8 text-center text-slate-500">
+              {podeConferir
+                ? "Nenhum pedido entregue aguardando conferência."
+                : "Nenhum pedido encontrado."}
+            </div>
+          )}
         </div>
       </div>
+
+      {podeConferir && (
+        <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+          <button
+            onClick={() => setHistoricoAberto((v) => !v)}
+            aria-expanded={historicoAberto}
+            className="w-full flex items-center justify-between px-4 py-3 hover:bg-slate-50 transition-colors"
+          >
+            <span className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+              <CheckCircle className="w-4 h-4 text-emerald-600" />
+              Conferidos recentemente ({conferidosFiltrados.length})
+            </span>
+            {historicoAberto ? (
+              <ChevronUp className="w-5 h-5 text-slate-400" />
+            ) : (
+              <ChevronDown className="w-5 h-5 text-slate-400" />
+            )}
+          </button>
+
+          {historicoAberto && (
+            <div className="border-t border-slate-200 divide-y divide-slate-200">
+              {conferidosFiltrados.map((pedido) => {
+                const total = pedido.itens.reduce((s, i) => s + i.valorTotal, 0);
+                return (
+                  <div key={pedido.id} className="p-4 sm:px-6 flex flex-wrap items-center gap-3">
+                    <span className="flex items-center gap-2 text-sm font-medium text-blue-600">
+                      <FileText className="w-4 h-4" />
+                      {pedido.numeroPedido}
+                    </span>
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">
+                      <CheckCircle className="w-3.5 h-3.5" /> {STATUS_PEDIDO_LABEL[pedido.status]}
+                    </span>
+                    <span className="text-sm text-slate-600">{pedido.setor?.nome}</span>
+                    <span className="text-sm text-slate-400">· {pedido.contrato?.numero}</span>
+                    <span className="text-sm text-slate-400">
+                      · {format(parseISO(pedido.dataPedido), "dd/MM/yyyy")}
+                    </span>
+                    <div className="ml-auto flex items-center gap-3">
+                      <span className="text-sm font-semibold text-slate-900">{fmt.format(total)}</span>
+                      {pedido.arquivoTermo && (
+                        <button
+                          disabled={criando}
+                          onClick={() => baixarTermo(pedido)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors bg-slate-50 text-slate-700 hover:bg-slate-100 border-slate-300 disabled:opacity-40"
+                        >
+                          <FileDown className="w-3.5 h-3.5" />
+                          Termo de Recebimento
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+              {conferidosFiltrados.length === 0 && (
+                <div className="p-6 text-center text-sm text-slate-500">
+                  Nenhum pedido conferido até agora.
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {isCreateOpen && (
         <NovoPedidoModal

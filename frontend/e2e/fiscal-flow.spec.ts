@@ -96,6 +96,7 @@ test.describe("Compras (compras@marizopolis.gov.br)", () => {
     await logar(page, "compras@marizopolis.gov.br");
     await page.goto("/pedidos");
     await expect(page.getByText(/Fila de compras/)).toBeVisible();
+    await expect(page.getByRole("button", { name: /^Todos \(/ })).toBeVisible();
     await expect(page.getByText("REQ-002")).toBeVisible();
     await expect(page.getByRole("button", { name: "Novo Pedido" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Conferir e Concluir" })).toHaveCount(0);
@@ -119,13 +120,20 @@ test.describe("Fiscalização de Contratos (fcon@marizopolis.gov.br)", () => {
     await expect(itemNav(page, "Renovacoes")).toBeVisible();
   });
 
-  test("conferência final: não registra a compra (etapa do Compras)", async ({ page }) => {
+  test("recebe apenas os pedidos entregues, sem as etapas do Compras", async ({ page }) => {
     await logar(page, "fcon@marizopolis.gov.br");
     await page.goto("/pedidos");
-    await expect(page.getByText("REQ-002")).toBeVisible();
-    await expect(page.getByRole("button", { name: "Registrar Compra" })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Informar Chegada" })).toHaveCount(0);
-    await expect(page.getByText(/Conferência final/)).toBeVisible();
+    await expect(page.getByText(/Pedidos entregues pelo Compras aguardando conferência/)).toBeVisible();
+    // As etapas do pedido pertencem à tela do Compras.
+    await expect(page.getByRole("button", { name: /^Todos \(/ })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /Registrar Compra/ })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /Compra Efetuada/ })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /Informar Chegada/ })).toHaveCount(0);
+    // Filtros de gestão também ficam no Compras; sobra apenas a busca.
+    await expect(page.getByLabel("Filtrar por secretaria")).toHaveCount(0);
+    await expect(page.getByLabel("Ordenar pedidos")).toHaveCount(0);
+    // Histórico do que já foi conferido fica disponível para reimprimir o termo.
+    await expect(page.getByRole("button", { name: /Conferidos recentemente/ })).toBeVisible();
   });
 
   test("visualiza saldos de estoque do contrato", async ({ page }) => {
