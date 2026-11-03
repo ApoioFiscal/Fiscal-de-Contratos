@@ -44,6 +44,59 @@ async function main() {
     },
   });
 
+  // Secretaria de exemplo: beneficiária dos contratos e origem dos pedidos de teste
+  const setorSaude = await prisma.setor.upsert({
+    where: { sigla: 'SAUDE' },
+    update: { tipo: TipoSetor.SECRETARIA },
+    create: {
+      nome: 'Secretaria Municipal de Saúde',
+      sigla: 'SAUDE',
+      tipo: TipoSetor.SECRETARIA,
+    },
+  });
+
+  // Usuário de teste da Secretaria de Licitações
+  const usuarioLic = await prisma.usuario.upsert({
+    where: { email: 'lic@marizopolis.gov.br' },
+    update: { funcao: FuncaoUsuario.SECRETARIO, idSetor: setorLicitacoes.id },
+    create: {
+      nome: 'Licitações',
+      email: 'lic@marizopolis.gov.br',
+      senha: senhaHash,
+      funcao: FuncaoUsuario.SECRETARIO,
+      isAdmin: false,
+      idSetor: setorLicitacoes.id,
+    },
+  });
+
+  // Usuário de teste da Secretaria de Saúde (beneficiária dos contratos de exemplo)
+  const usuarioSaude = await prisma.usuario.upsert({
+    where: { email: 'saude@marizopolis.gov.br' },
+    update: { funcao: FuncaoUsuario.SECRETARIO, idSetor: setorSaude.id },
+    create: {
+      nome: 'Secretaria de Saúde',
+      email: 'saude@marizopolis.gov.br',
+      senha: senhaHash,
+      funcao: FuncaoUsuario.SECRETARIO,
+      isAdmin: false,
+      idSetor: setorSaude.id,
+    },
+  });
+
+  // Usuário de teste da Fiscalização de Contratos
+  const usuarioFcon = await prisma.usuario.upsert({
+    where: { email: 'fcon@marizopolis.gov.br' },
+    update: { funcao: FuncaoUsuario.FISCAL, idSetor: setorFiscalizacao.id },
+    create: {
+      nome: 'Fiscalização de Contratos',
+      email: 'fcon@marizopolis.gov.br',
+      senha: senhaHash,
+      funcao: FuncaoUsuario.FISCAL,
+      isAdmin: false,
+      idSetor: setorFiscalizacao.id,
+    },
+  });
+
   const usuarioCompras = await prisma.usuario.upsert({
     where: { email: 'compras@marizopolis.gov.br' },
     update: { funcao: FuncaoUsuario.SECRETARIO, idSetor: setorCompras.id },
@@ -156,6 +209,9 @@ async function main() {
 
   console.log('Seed finalizado! Super Usuário garantido:', superAdmin.email);
   console.log('Usuário de compras garantido:', usuarioCompras.email);
+  console.log('Usuário de licitações garantido:', usuarioLic.email);
+  console.log('Usuário de saúde garantido:', usuarioSaude.email);
+  console.log('Usuário de fiscalização garantido:', usuarioFcon.email);
   console.log('Contrato de exemplo garantido:', contratoExemplo.numero);
 }
 
