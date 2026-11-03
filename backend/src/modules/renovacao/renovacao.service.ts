@@ -65,12 +65,12 @@ export class TermoRenovacaoService {
 
     const data = {
       status: input.status,
-      parecerContrato: input.parecerContrato ?? undefined,
+      parecerLicitacao: input.parecerLicitacao ?? undefined,
       acaoTomada: input.acaoTomada ?? undefined,
     };
 
     if (input.status === StatusTermoRenovacao.RESOLVIDO || input.status === StatusTermoRenovacao.ARQUIVADO) {
-      (data as Record<string, unknown>).idUsuarioContrato = user.id;
+      (data as Record<string, unknown>).idUsuarioLicitacao = user.id;
       (data as Record<string, unknown>).dataResolucao = new Date();
     }
 

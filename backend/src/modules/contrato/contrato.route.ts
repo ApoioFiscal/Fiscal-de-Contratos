@@ -4,9 +4,10 @@ import { ContratoController } from "./contrato.controller";
 import { ContratoService } from "./contrato.service";
 import { ContratoRepository } from "./contrato.repository";
 import { ParsingClient } from "./parsingClient";
-import { asyncHandler, autenticationMiddleware, validateParams } from "../../common/middleware";
+import { asyncHandler, autenticationMiddleware, validateBody, validateParams } from "../../common/middleware";
 import { requerPerfil } from "../../common/perfil";
 import { IdParamSchema } from "../../common/schemas";
+import { AtualizarContratoSchema } from "../../common/contrato.schema";
 
 const repository = new ContratoRepository();
 const parsing = new ParsingClient();
@@ -16,7 +17,7 @@ const controller = new ContratoController(service);
 export const contratoRouter = Router();
 
 // Importa um PDF assinado: o backend faz o proxy para o parsing, valida com o Zod
-// (schema canÃ´nico do contrato real) e persiste no schema `contrato`.
+// (schema canônico do contrato real) e persiste no schema `contrato`.
 contratoRouter.post(
   "/importar",
   autenticationMiddleware,
@@ -38,6 +39,7 @@ contratoRouter.patch(
   autenticationMiddleware,
   requerPerfil("licitacoes", "gabinete"),
   validateParams(IdParamSchema),
+  validateBody(AtualizarContratoSchema),
   asyncHandler(async (req, res) => controller.atualizar(req, res)),
 );
 

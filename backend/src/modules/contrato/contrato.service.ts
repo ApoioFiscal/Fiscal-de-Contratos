@@ -1,6 +1,6 @@
 import path from "path";
 import { existsSync } from "fs";
-import { ContratoExtractionSchema } from "../../common/contrato.schema";
+import { ContratoExtractionSchema, AtualizarContratoSchema, AtualizarContratoInput } from "../../common/contrato.schema";
 import { ContratoRepository } from "./contrato.repository";
 import { ParsingClient } from "./parsingClient";
 import { mapearParaCriar, ContratoCreateData } from "./conversorContrato";
@@ -60,5 +60,10 @@ export class ContratoService {
 
   async findByNumero(numero: string) {
     return this.repository.findByNumero(numero);
+  }
+
+  async atualizar(id: number, input: AtualizarContratoInput) {
+    const contrato = await this.repository.atualizar(id, input);
+    return contrato;
   }
 }

@@ -103,7 +103,7 @@ export class PedidoService {
       itensDoPedido.push({
         idContratoItem: itemInput.idContratoItem,
         quantidade: itemInput.quantidade,
-        valorUnitario: itemContrato.precoUnitario,
+        valorUnitario: itemContrato.valorUnitario,
       });
     }
 

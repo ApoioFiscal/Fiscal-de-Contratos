@@ -12,7 +12,7 @@ const termoInclude = {
     },
   },
   usuarioEmissor: { select: { id: true, nome: true } },
-  usuarioContrato: { select: { id: true, nome: true } },
+  usuarioLicitacao: { select: { id: true, nome: true } },
   setorSolicitante: { select: { id: true, nome: true, sigla: true } },
 } as const;
 

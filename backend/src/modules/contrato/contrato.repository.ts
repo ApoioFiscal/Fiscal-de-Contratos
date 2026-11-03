@@ -2,6 +2,8 @@ import { prisma } from "../../prisma/client";
 import { StatusContrato } from "@prisma/client";
 import { Prisma } from "@prisma/client";
 import { ContratoCreateData } from "./conversorContrato";
+import { AtualizarContratoInput } from "../../common/contrato.schema";
+import { NotFoundError } from "../../common/errors";
 
 const contratoInclude = {
   partes: true,
@@ -84,6 +86,79 @@ export class ContratoRepository {
         setores: { include: { setor: true }, orderBy: { id: "asc" } },
       },
     });
+
+    return contrato;
+  }
+
+  async atualizar(id: number, input: AtualizarContratoInput) {
+    const atual = await prisma.contrato.findUnique({
+      where: { id },
+      select: { status: true },
+    });
+
+    if (!atual) {
+      throw new NotFoundError("Contrato");
+    }
+
+    const data: Prisma.ContratoUncheckedUpdateInput = {};
+
+    if (input.numero_contrato !== undefined) data.numero = input.numero_contrato ?? undefined;
+    if (input.numero_processo !== undefined) data.numeroProcesso = input.numero_processo;
+    if (input.modalidade !== undefined) data.modalidade = input.modalidade;
+    if (input.numero_modalidade !== undefined) data.numeroModalidade = input.numero_modalidade;
+    if (input.objeto !== undefined) data.objeto = input.objeto;
+    if (input.valor_total !== undefined) data.valorTotal = input.valor_total;
+    if (input.vigencia?.data_inicio !== undefined) {
+      data.vigenciaInicio = input.vigencia.data_inicio ? new Date(input.vigencia.data_inicio) : null;
+    }
+    if (input.vigencia?.data_fim !== undefined) {
+      data.vigenciaFim = input.vigencia.data_fim ? new Date(input.vigencia.data_fim) : null;
+    }
+    if (input.vigencia?.data_fim_calculada !== undefined) {
+      data.vigenciaFimCalculada = input.vigencia.data_fim_calculada;
+    }
+    if (input.vigencia?.trecho !== undefined) data.vigenciaTrecho = input.vigencia.trecho;
+    if (input.foro !== undefined) data.foro = input.foro;
+    if (input.valor_total !== undefined) data.valorTotal = input.valor_total;
+    if (input.fundamentacao_legal !== undefined) data.fundamentacaoLegal = input.fundamentacao_legal;
+    if (input.condicoes !== undefined) data.condicoes = input.condicoes as Prisma.InputJsonValue;
+    if (input.assinatura !== undefined) {
+      data.assinaturaLocal = input.assinatura.local;
+      data.assinaturaData = input.assinatura.data ? new Date(input.assinatura.data) : null;
+      data.assinaturaDigital = input.assinatura.assinatura_digital?.detectada ?? false;
+      data.assinaturaPlataforma = input.assinatura.assinatura_digital?.plataforma ?? null;
+      data.assinaturaAssinante = input.assinatura.assinatura_digital?.assinante ?? null;
+    }
+
+    // `confirmar: true` na revisão promove RASCUNHO → ATIVA.
+    if (input.confirmar) {
+      data.status = StatusContrato.ATIVA;
+    }
+
+    const contrato = await prisma.contrato.update({
+      where: { id },
+      data,
+      include: {
+        ...contratoInclude,
+        setores: { include: { setor: true }, orderBy: { id: "asc" } },
+      },
+    });
+
+    // Vínculos contrato ↔ secretaria (origem DOTACAO/MANUAL) enviados na revisão.
+    if (input.setores !== undefined) {
+      await prisma.contratoSetor.deleteMany({ where: { idContrato: id } });
+
+      const vinculados = input.setores.filter((s) => s.idSetor > 0);
+      if (vinculados.length > 0) {
+        await prisma.contratoSetor.createMany({
+          data: vinculados.map((s) => ({
+            idContrato: id,
+            idSetor: s.idSetor,
+            origem: s.origem,
+          })),
+        });
+      }
+    }
 
     return contrato;
   }

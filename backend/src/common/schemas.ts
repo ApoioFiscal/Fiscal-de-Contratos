@@ -175,7 +175,7 @@ export type CreateTermoRenovacaoInput = z.infer<typeof CreateTermoRenovacaoSchem
 
 export const AtualizarTermoRenovacaoSchema = z.object({
   status: z.enum(STATUS_TERMO_VALUES),
-  parecerContrato: z.string().max(1000).trim().optional(),
+  parecerLicitacao: z.string().max(1000).trim().optional(),
   acaoTomada: z.enum(ACAO_TOMADA_VALUES).optional(),
 });
 

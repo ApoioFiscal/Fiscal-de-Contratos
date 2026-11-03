@@ -187,10 +187,10 @@ export class EstoqueRepository {
       select: {
         id: true,
         descricao: true,
-        marca: true,
         unidade: true,
         quantidade: true,
-        precoUnitario: true,
+        valorUnitario: true,
+        valorTotal: true,
         recebido: true,
         consumido: true,
       },

@@ -21,10 +21,9 @@ const pedidoInclude = {
         select: {
           id: true,
           descricao: true,
-          marca: true,
           unidade: true,
           quantidade: true,
-          precoUnitario: true,
+          valorUnitario: true,
         },
       },
     },
@@ -37,6 +36,11 @@ const pedidoInclude = {
       objeto: true,
       valorTotal: true,
       vigenciaFim: true,
+      partes: {
+        where: { papel: "CONTRATADO" as const },
+        take: 1,
+        select: { nome: true, documento: true },
+      },
     },
   },
   setor: {
@@ -75,7 +79,7 @@ export class PedidoRepository {
             descricao: true,
             unidade: true,
             quantidade: true,
-            precoUnitario: true,
+            valorUnitario: true,
             consumido: true,
           },
         },

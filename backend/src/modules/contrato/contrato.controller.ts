@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { ContratoService } from "./contrato.service";
-import { sendSuccess, asyncHandler } from "../../common/middleware";
+import { AtualizarContratoSchema, AtualizarContratoInput } from "../../common/contrato.schema";
+import { sendSuccess, asyncHandler, validateBody, validateParams } from "../../common/middleware";
 
 export class ContratoController {
   constructor(private readonly service: ContratoService) {}
@@ -27,7 +28,8 @@ export class ContratoController {
   }
 
   async atualizar(req: Request, res: Response): Promise<void> {
-    const contrato = await this.service.findById(Number(req.params.id));
+    const input: AtualizarContratoInput = AtualizarContratoSchema.parse(req.body);
+    const contrato = await this.service.atualizar(Number(req.params.id), input);
     sendSuccess(res, contrato);
   }
 
