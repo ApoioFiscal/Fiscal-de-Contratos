@@ -36,13 +36,16 @@ export async function obterContrato(id: number): Promise<Contrato> {
 
 export async function importarContratoArquivo(arquivo: File): Promise<ImportacaoContratoResult> {
   const token = localStorage.getItem("token");
-  const formData = new FormData();
-  formData.append("file", arquivo, arquivo.name);
 
+  // O backend espera o PDF cru (Content-Type application/pdf) e o encaminha ao parsing.
+  // O nome vai na query (?nome=) porque o corpo não é multipart.
   const response = await fetch(`/api/contratos/importar?nome=${encodeURIComponent(arquivo.name)}`, {
     method: "POST",
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-    body: formData,
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      "Content-Type": "application/pdf",
+    },
+    body: arquivo,
   });
 
   const payload = (await response.json().catch(() => null)) as
