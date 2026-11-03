@@ -1,0 +1,109 @@
+import assert from "node:assert/strict";
+import { existsSync, readFileSync } from "node:fs";
+import path from "node:path";
+import test from "node:test";
+import { ContratoExtractionSchema } from "./contrato.schema";
+
+/**
+ * Contrato entre os pacotes: o backend só aceita como contrato o que o extrator do
+ * `parsing` produz. Este teste lê o golden file gerado do contrato real
+ * (processo 260803DV00014) e exige que o schema continue aceitando a extração.
+ *
+ * Se o colega mudar a forma de `ContratoExtraction`, este teste quebra de propósito —
+ * é melhor quebrar aqui do que dessincronizar em silêncio.
+ */
+const GOLDEN = path.join(
+  __dirname,
+  "..",
+  "..",
+  "..",
+  "parsing",
+  "src",
+  "services",
+  "__fixtures__",
+  "contrato_dv00014_2026.extracted.json",
+);
+
+test("golden do contrato real existe (monorepo)" , () => {
+  assert.ok(
+    existsSync(GOLDEN),
+    `Golden file não encontrado em ${GOLDEN}. O teste exige o repositório completo (backend + parsing).`,
+  );
+});
+
+test("schema aceita a extração do contrato real sem alterar nenhum campo", () => {
+  const raw = JSON.parse(readFileSync(GOLDEN, "utf8"));
+  const parsed = ContratoExtractionSchema.parse(raw);
+
+  // `parse` não pode descartar nada silenciosamente.
+  assert.deepEqual(parsed, raw);
+});
+
+test("contrato real: dados que a tela de revisão usa estão presentes", () => {
+  const contrato = ContratoExtractionSchema.parse(
+    JSON.parse(readFileSync(GOLDEN, "utf8")),
+  );
+
+  assert.equal(contrato.numero_contrato, "00141/2026-SDC");
+  assert.equal(contrato.numero_processo, "260803DV00014");
+  assert.equal(contrato.contratante.documento, "01.612.941/0001-49");
+  assert.equal(contrato.contratado.nome, "RENATA RODRIGUES LOURENCO DE ALMEIDA");
+  assert.equal(contrato.contratado.documento, "35.848.636/0001-72");
+  assert.equal(contrato.vigencia.data_fim, "2026-12-31");
+  assert.equal(contrato.assinatura.data, "2026-08-19");
+  assert.equal(contrato.valor_total, 37135);
+
+  // 4 secretarias beneficiárias vêm das dotações.
+  assert.deepEqual(
+    contrato.dotacoes.map((d) => d.unidade),
+    [
+      "GABINETE DO PREFEITO",
+      "SECRETARIA DE EDUCAÇÃO",
+      "SECRETARIA DE SAUDE",
+      "FUNDO MUNICIPAL DE ASSSITENCIA SOCIAL-FMAS",
+    ],
+  );
+
+  // Quantidade fracionária (m²) precisa sobreviver como número, não ser truncada.
+  assert.equal(contrato.itens[0].quantidade, 50);
+
+  // O que não foi lido com segurança fica null e vem acompanhado de aviso.
+  assert.equal(contrato.signatarios[2].nome, null);
+  assert.equal(contrato.signatarios[2].legivel, false);
+  assert.ok(contrato.avisos.length >= 3);
+});
+
+test("schema rejeita contrato sem as partes (não inventa dados)", () => {
+  const semPartes = {
+    numero_contrato: "001/2026",
+    numero_processo: null,
+    modalidade: null,
+    numero_modalidade: null,
+    objeto: null,
+    signatarios: [],
+    assinatura: {
+      local: null,
+      data: null,
+      assinatura_digital: { detectada: false, plataforma: null, assinante: null },
+    },
+    vigencia: {
+      data_inicio: null,
+      data_fim: null,
+      data_fim_calculada: false,
+      trecho: null,
+    },
+    valor_total: null,
+    itens: [],
+    dotacoes: [],
+    condicoes: { prazo_execucao: null, prazo_pagamento: null, reajuste: null },
+    fundamentacao_legal: [],
+    foro: null,
+    validacoes: {
+      soma_itens_confere_total_da_tabela: null,
+      soma_itens_confere_valor_do_contrato: null,
+    },
+    avisos: [],
+  };
+
+  assert.throws(() => ContratoExtractionSchema.parse(semPartes));
+});

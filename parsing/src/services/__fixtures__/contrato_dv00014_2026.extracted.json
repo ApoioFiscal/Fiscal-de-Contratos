@@ -1,0 +1,250 @@
+{
+  "numero_contrato": "00141/2026-SDC",
+  "numero_processo": "260803DV00014",
+  "modalidade": "Dispensa de Licitação",
+  "numero_modalidade": "DV00014/2026",
+  "objeto": "CONTRATAÇÃO DE EMPRESA ESPECIALIZADA PARA A CONFECÇÃO, FORNECIMENTO E INSTALAÇÃO DE PLACAS DE COMUNICAÇÃO VISUAL, DESTINADAS AO ATENDIMENTO DA. , NECESSIDADES DA PREFEITURA MUNICIPAL DE MARIZÓPOLIS/PB, COMPREENDENDO A PRODUÇÃO DE PLACAS EM ACM, ACRÍLICO, PVC EXPANDIDO E DEMAIS MATERIAIS DE COMUNICAÇÃO VISUAL, INCLUINDO INSTALAÇÃO NOS LOCAIS INDICADOS PELA ADMINISTRAÇÃO.",
+  "contratante": {
+    "papel": "CONTRATANTE",
+    "nome": "Prefeitura Municipal de Marizópolis",
+    "documento": "01.612.941/0001-49",
+    "tipo_documento": "CNPJ",
+    "endereco": "Rua João Vicente de Almeida, SN - Edilson Alves - Marizopolis - PB",
+    "representante": {
+      "nome": "Lucas Gonçalves Braga",
+      "cargo": "Prefeito",
+      "cpf": "009.910.544-66",
+      "rg": "2631985",
+      "orgao_emissor_rg": "SSP/PB",
+      "nacionalidade": "Brasileiro",
+      "estado_civil": "Casado",
+      "profissao": "Arquiteto",
+      "endereco": "Rua João Vicente de Almeida, SN - Edilson Alves Silva - Marizopolis - PB"
+    }
+  },
+  "contratado": {
+    "papel": "CONTRATADO",
+    "nome": "RENATA RODRIGUES LOURENCO DE ALMEIDA",
+    "documento": "35.848.636/0001-72",
+    "tipo_documento": "CNPJ",
+    "endereco": "RUA OTAVIO MARIZ, 41 - CENTRO - MARIZOPOLIS - PB",
+    "representante": null
+  },
+  "signatarios": [
+    {
+      "papel": "CONTRATANTE",
+      "nome": "Lucas Gonçalves Braga",
+      "cargo": "Prefeito",
+      "cpf": "009.910.544-66",
+      "cnpj": null,
+      "rg": "2631985",
+      "orgao_emissor_rg": "SSP/PB",
+      "nacionalidade": "Brasileiro",
+      "estado_civil": "Casado",
+      "profissao": "Arquiteto",
+      "endereco": "Rua João Vicente de Almeida, SN - Edilson Alves Silva - Marizopolis - PB",
+      "confirmado_no_bloco_de_assinatura": false,
+      "legivel": true
+    },
+    {
+      "papel": "CONTRATADO",
+      "nome": "RENATA RODRIGUES LOURENCO DE ALMEIDA",
+      "cargo": null,
+      "cpf": null,
+      "cnpj": "35.848.636/0001-72",
+      "rg": null,
+      "orgao_emissor_rg": null,
+      "nacionalidade": null,
+      "estado_civil": null,
+      "profissao": null,
+      "endereco": "RUA OTAVIO MARIZ, 41 - CENTRO - MARIZOPOLIS - PB",
+      "confirmado_no_bloco_de_assinatura": true,
+      "legivel": true
+    },
+    {
+      "papel": "TESTEMUNHA",
+      "nome": null,
+      "cargo": null,
+      "cpf": null,
+      "cnpj": null,
+      "rg": null,
+      "orgao_emissor_rg": null,
+      "nacionalidade": null,
+      "estado_civil": null,
+      "profissao": null,
+      "endereco": null,
+      "confirmado_no_bloco_de_assinatura": false,
+      "legivel": false
+    },
+    {
+      "papel": "TESTEMUNHA",
+      "nome": null,
+      "cargo": null,
+      "cpf": null,
+      "cnpj": null,
+      "rg": null,
+      "orgao_emissor_rg": null,
+      "nacionalidade": null,
+      "estado_civil": null,
+      "profissao": null,
+      "endereco": null,
+      "confirmado_no_bloco_de_assinatura": false,
+      "legivel": false
+    }
+  ],
+  "assinatura": {
+    "local": "Marizópolis - PB",
+    "data": "2026-08-19",
+    "assinatura_digital": {
+      "detectada": true,
+      "plataforma": "gov.br",
+      "assinante": "RENATA RODRIGUES LOURENCO DE ALMEIDA"
+    }
+  },
+  "vigencia": {
+    "data_inicio": "2026-08-19",
+    "data_fim": "2026-12-31",
+    "data_fim_calculada": false,
+    "trecho": "vigência do presente contrato será determinada: até 31 de dezembro de 2026, considerada da data de sua assinatura"
+  },
+  "valor_total": 37135,
+  "itens": [
+    {
+      "codigo": 1,
+      "descricao": "PLACA EM ACM COM ESTRUTURA METÁLICA GALVANIZADA COM INSTALAÇÃO NO LOCAL.",
+      "unidade": "m²",
+      "unidade_original": "M2",
+      "quantidade": 50,
+      "valor_unitario": 289,
+      "valor_total": 14450,
+      "correcoes": [
+        "valor_unitario_corrigido_de_289,06_para_289.00",
+        "descricao_reordenada_por_ocr"
+      ]
+    },
+    {
+      "codigo": 2,
+      "descricao": "PLACA EM ACM COM ILUMINAÇÃO INTERNA, ESTRUTURA METÁLICA GALVANIZADA COM INSTALAÇÃO NO LOCAL.",
+      "unidade": "m²",
+      "unidade_original": "M2",
+      "quantidade": 10,
+      "valor_unitario": 859,
+      "valor_total": 8590,
+      "correcoes": []
+    },
+    {
+      "codigo": 3,
+      "descricao": "ACRILICO EM DIVERSAS CORESS E TAMANIIOS 3MM.",
+      "unidade": "m²",
+      "unidade_original": "N42",
+      "quantidade": 10,
+      "valor_unitario": 267,
+      "valor_total": 2670,
+      "correcoes": [
+        "unidade_corrigida_de_N42_para_m²"
+      ]
+    },
+    {
+      "codigo": 4,
+      "descricao": "PVC EXPANDIDO 20 MM COM PINTURA AUTOMOTIVA E INSTALAÇÃO NO LOCAL.",
+      "unidade": "m²",
+      "unidade_original": "M2",
+      "quantidade": 15,
+      "valor_unitario": 497,
+      "valor_total": 7455,
+      "correcoes": [
+        "valor_total_recalculado_de_7.455,0(1"
+      ]
+    },
+    {
+      "codigo": 5,
+      "descricao": "PVC EXPANDIDO 10 MM COM PINTURA AUTOMOTIVA E INSTALAÇÃO NO LOCAL.",
+      "unidade": "m²",
+      "unidade_original": "M2",
+      "quantidade": 10,
+      "valor_unitario": 397,
+      "valor_total": 3970,
+      "correcoes": []
+    }
+  ],
+  "dotacoes": [
+    {
+      "unidade_codigo": "02.010",
+      "unidade": "GABINETE DO PREFEITO",
+      "funcional_programatica": "04 122 0020 2002",
+      "acao": "MANUTENÇÃO DAS ATIV. DO GABINETE DO PREFEITO",
+      "ficha": "000021",
+      "elemento_codigo": "3390.3099",
+      "elemento_descricao": "MATERIAL DE CONSUMO",
+      "natureza_codigo": "3390.39",
+      "natureza": "Outros Serviços de Terceiros - Pessoa Jurídica",
+      "complemento": null
+    },
+    {
+      "unidade_codigo": "02.120",
+      "unidade": "SECRETARIA DE EDUCAÇÃO",
+      "funcional_programatica": "12 361 0100 2044",
+      "acao": "MANUTENÇÃO SECRETARIA DE EDUCAÇÃO",
+      "ficha": "000489",
+      "elemento_codigo": "3390.3099",
+      "elemento_descricao": "MATERIAL DE CONSUMO",
+      "natureza_codigo": "3390.39",
+      "natureza": "Outros Serviços de Terceiros - Pessoa Jurídica",
+      "complemento": null
+    },
+    {
+      "unidade_codigo": "02.110",
+      "unidade": "SECRETARIA DE SAUDE",
+      "funcional_programatica": "10 122 0070 2039",
+      "acao": "MANUTENÇÃO DA SECRETARIA DE SAUDE",
+      "ficha": "000424",
+      "elemento_codigo": "3390.3099",
+      "elemento_descricao": "MATERIAL DE CONSUMO",
+      "natureza_codigo": "3390.39",
+      "natureza": "Outros Serviços de Terceiros - Pessoa Jurídica",
+      "complemento": null
+    },
+    {
+      "unidade_codigo": "02.190",
+      "unidade": "FUNDO MUNICIPAL DE ASSSITENCIA SOCIAL-FMAS",
+      "funcional_programatica": "08 244 0060 1051",
+      "acao": "PROGRAMA FUNDO MUN ASS SOCIAL IGD/SUAS",
+      "ficha": "000870",
+      "elemento_codigo": "3390.3099",
+      "elemento_descricao": "MATERIAL DE CONSUMO",
+      "natureza_codigo": "3390.39",
+      "natureza": "Outros Serviços de Terceiros - Pessoa Jurídica",
+      "complemento": "Objetivo: PROGRAMA IGD/SUAS 16600000 Transferência de Recursos do Fundo Nacional de Assistência Social - FNAS APLICAÇÕES DIRETAS"
+    }
+  ],
+  "condicoes": {
+    "prazo_execucao": {
+      "quantidade": 15,
+      "unidade": "dias úteis",
+      "marco": "Ordem de Fornecimento"
+    },
+    "prazo_pagamento": {
+      "quantidade": 30,
+      "unidade": "dias corridos"
+    },
+    "reajuste": {
+      "prazo": "um ano",
+      "indice": "IPCA"
+    }
+  },
+  "fundamentacao_legal": [
+    "Lei Federal nº 14.133/2021",
+    "Lei Complementar nº 123/2006"
+  ],
+  "foro": "Sousa",
+  "validacoes": {
+    "soma_itens_confere_total_da_tabela": true,
+    "soma_itens_confere_valor_do_contrato": true
+  },
+  "avisos": [
+    "3 item(ns) tiveram valor, unidade ou descrição ajustados por conflito de OCR (ver 'correcoes'): confira com o PDF.",
+    "O objeto contém trecho com ruído de OCR (pontuação solta): revise o texto.",
+    "Bloco de assinatura do contratante ilegível no OCR: os dados do signatário foram tirados da qualificação das partes. Confira a assinatura no PDF.",
+    "2 testemunha(s) não puderam ser lidas (assinatura/identificação manuscrita): preencha manualmente."
+  ]
+}
