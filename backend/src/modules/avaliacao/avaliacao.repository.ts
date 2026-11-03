@@ -23,7 +23,7 @@ export class AvaliacaoRepository {
       },
       include: {
         pedido: { select: { numeroPedido: true, status: true } },
-        contrato: { select: { id: true, numero: true, fornecedor: true } },
+        contrato: { select: { id: true, numero: true, vigenciaFim: true, status: true } },
         usuarioFiscal: { select: { nome: true } },
       },
     });
@@ -34,7 +34,7 @@ export class AvaliacaoRepository {
       where: idContrato ? { idContrato } : undefined,
       include: {
         pedido: { select: { numeroPedido: true, status: true } },
-        contrato: { select: { id: true, numero: true, fornecedor: true } },
+        contrato: { select: { id: true, numero: true, vigenciaFim: true, status: true } },
         usuarioFiscal: { select: { nome: true } },
       },
       orderBy: { dataAvaliacao: "desc" },

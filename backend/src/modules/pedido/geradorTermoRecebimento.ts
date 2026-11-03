@@ -12,11 +12,11 @@ import {
 } from "docx";
 
 export interface ItemPedidoParaTermo {
-  idItemLicitado: number;
+  idContratoItem: number;
   quantidade: number;
   valorUnitario: number;
   valorTotal: number;
-  itemLicitado?: {
+  itemContrato?: {
     descricao: string;
     marca?: string;
     unidade: string;
@@ -88,9 +88,9 @@ export class GeradorTermoRecebimentoDocx {
     const dadosItens: Array<Array<unknown>> = [
       ["CÓDIGO", "DISCRIMINAÇÃO", "UNIDADE", "QUANTIDADE", "P.UNITÁRIO", "P. TOTAL"],
       ...pedido.itens.map((item) => [
-        String(item.idItemLicitado),
-        item.itemLicitado?.descricao ?? `Item ${item.idItemLicitado}`,
-        item.itemLicitado?.unidade ?? "UN",
+        String(item.idContratoItem),
+        item.itemContrato?.descricao ?? `Item ${item.idContratoItem}`,
+        item.itemContrato?.unidade ?? "UN",
         String(item.quantidade),
         fmtMoeda.format(item.valorUnitario),
         fmtMoeda.format(item.valorTotal),

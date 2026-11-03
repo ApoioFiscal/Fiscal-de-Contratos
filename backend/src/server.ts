@@ -10,7 +10,9 @@ const PORT = process.env.PORT ?? 3333;
 // Liberando o CORS para aceitar requisições do frontend (localhost:5173)
 app.use(cors());
 
-app.use(express.json());
+app.use(express.json({ limit: "10mb" }));
+// Importação de contrato: o PDF cru chega aqui antes do parser JSON.
+app.use(express.raw({ type: "application/pdf", limit: "20mb" }));
 app.use("/api", router);
 
 // Health check para monitoramento externo (Render/Vercel/professor)

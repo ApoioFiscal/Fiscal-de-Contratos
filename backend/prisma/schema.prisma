@@ -18,7 +18,7 @@ model Setor {
   atualizadoEm               DateTime         @updatedAt
   setorPai                   Setor?           @relation("SetorHierarquia", fields: [idSetor], references: [id])
   subSetores                 Setor[]          @relation("SetorHierarquia")
-  licitacoes                 LicitacaoSetor[]
+  contratos                  ContratoSetor[]
   pedidosSolicitados         Pedido[]         @relation("SolicitantePedido")
   termosRenovacaoSolicitados TermoRenovacao[] @relation("SolicitanteTermo")
   usuarios                   Usuario[]
@@ -42,75 +42,173 @@ model Usuario {
   termosEmitidos   TermoRenovacao[]  @relation("TermoEmissor")
   termosResolvidos TermoRenovacao[]  @relation("TermoResolvido")
   setor            Setor             @relation(fields: [idSetor], references: [id])
-  solicitacoes     Solicitacao[]
 
   @@index([idSetor])
   @@map("usuario")
 }
 
-model LicitacaoContrato {
-  id                  Int              @id @default(autoincrement())
-  numero              String           @unique
-  numeroProcesso      String
-  modalidade          String
-  objeto              String
-  fornecedor          String
-  cnpjFornecedor      String
-  dataAbertura        DateTime
-  dataVigenciaFim     DateTime
-  status              StatusContrato   @default(RASCUNHO)
-  valorTotal          Float
-  arquivoContrato     String?
-  dataGeracaoContrato DateTime?
-  dispensa            String?
-  numContrato         String?
-  numProcesso         String?
-  statusBool          Boolean?
-  avaliacoes          Avaliacao[]
-  itens               ItemLicitado[]
-  setores             LicitacaoSetor[]
-  notasFiscais        NotaFiscal[]
-  pedidos             Pedido[]
-  termosRenovacao     TermoRenovacao[]
-  contratantes        Contratante[]
-  contratados         Contratado[]
+// Contrato administrativo. Os campos vêm da extração real do PDF assinado
+// (`ContratoExtraction` no pacote `parsing`, validado por `contrato.schema.ts`).
+// Nada de `dataAbertura`, `fornecedor` ou `cnpjFornecedor`: abertura é da licitação,
+// e a empresa é o `contratado`.
+model Contrato {
+  id                   Int            @id @default(autoincrement())
+  numero               String         @unique
+  numeroProcesso       String?
+  modalidade           String?
+  numeroModalidade     String?
+  objeto               String?
+  valorTotal           Float?
+  // Vigência: `fim` pode ter sido calculada a partir de uma duração (ex.: "12 meses").
+  vigenciaInicio       DateTime?
+  vigenciaFim          DateTime?
+  vigenciaFimCalculada Boolean        @default(false)
+  vigenciaTrecho       String?
+  foro                 String?
+  status               StatusContrato @default(RASCUNHO)
 
-  @@map("licitacao")
+  // Assinatura
+  assinaturaLocal      String?
+  assinaturaData       DateTime?
+  assinaturaDigital    Boolean   @default(false)
+  assinaturaPlataforma String?
+  assinaturaAssinante  String?
+
+  fundamentacaoLegal         String[]
+  condicoes                  Json?
+  avisos                     String[]
+  itensConferemTotalTabela   Boolean?
+  itensConferemValorContrato Boolean?
+
+  // PDF assinado importado — a fonte do contrato.
+  arquivoPdf     String?
+  arquivoPdfNome String?
+  // Payload completo devolvido pelo parsing, preservado como veio (auditoria).
+  dadosExtraidos Json?
+  importadoEm    DateTime  @default(now())
+  extraidoEm     DateTime?
+  atualizadoEm   DateTime  @updatedAt
+
+  partes          ContratoParte[]
+  signatarios     ContratoSignatario[]
+  itens           ContratoItem[]
+  dotacoes        ContratoDotacao[]
+  setores         ContratoSetor[]
+  pedidos         Pedido[]
+  notasFiscais    NotaFiscal[]
+  avaliacoes      Avaliacao[]
+  termosRenovacao TermoRenovacao[]
+
+  @@map("contrato")
 }
 
-model ItemLicitado {
-  id                  Int                   @id @default(autoincrement())
-  idLicitacao         Int
-  descricao           String
-  discriminacao       String?
-  marca               String
-  unidade             String
-  quantidade          Int
-  precoUnitario       Float
-  precoTotal          Float
-  recebido            Int                   @default(0)
-  consumido           Int                   @default(0)
-  idLicitacaoContrato Int?
-  licitacao           LicitacaoContrato     @relation(fields: [idLicitacao], references: [id])
-  movimentacoes       MovimentacaoEstoque[]
-  notaFiscalItems     NotaFiscalItem[]
-  pedidoItems         PedidoItem[]
-  solicitacoes        Solicitacao[]
+// Contratante e contratado. O representante é a qualificação da pessoa física que
+// assina pela parte (cargo, CPF, RG, nacionalidade, estado civil, profissão).
+model ContratoParte {
+  id                          Int            @id @default(autoincrement())
+  idContrato                  Int
+  papel                       PapelParte     @default(CONTRATADO)
+  nome                        String?
+  documento                   String?
+  tipoDocumento               TipoDocumento? @map("tipo_documento")
+  endereco                    String?
+  representanteNome           String?
+  representanteCargo          String?
+  representanteCpf            String?
+  representanteRg             String?
+  representanteOrgaoEmissorRg String?
+  representanteNacionalidade  String?
+  representanteEstadoCivil    String?
+  representanteProfissao      String?
+  representanteEndereco       String?
+  contrato                    Contrato       @relation(fields: [idContrato], references: [id])
 
-  @@index([idLicitacao])
-  @@map("item_licitado")
+  @@unique([idContrato, papel])
+  @@index([idContrato])
+  @@map("contrato_parte")
 }
 
-model LicitacaoSetor {
-  id          Int               @id @default(autoincrement())
-  idLicitacao Int
-  idSetor     Int
-  licitacao   LicitacaoContrato @relation(fields: [idLicitacao], references: [id])
-  setor       Setor             @relation(fields: [idSetor], references: [id])
+// Quem assinou o PDF. `confirmadoNoBloco` = o nome foi confirmado no bloco de
+// assinatura (e não só na qualificação das partes); `legivel` = o OCR conseguiu ler.
+model ContratoSignatario {
+  id                Int             @id @default(autoincrement())
+  idContrato        Int
+  papel             PapelSignatario
+  ordem             Int             @default(0)
+  nome              String?
+  cargo             String?
+  cpf               String?
+  cnpj              String?
+  rg                String?
+  orgaoEmissorRg    String?
+  nacionalidade     String?
+  estadoCivil       String?
+  profissao         String?
+  endereco          String?
+  confirmadoNoBloco Boolean         @default(false)
+  legivel           Boolean         @default(true)
+  contrato          Contrato        @relation(fields: [idContrato], references: [id])
 
-  @@unique([idLicitacao, idSetor])
+  @@index([idContrato])
+  @@map("contrato_signatario")
+}
+
+// Item do contrato. `recebido`/`consumido` são operacionais (estoque/pedidos) e não
+// vêm do PDF. `quantidade` é Float porque o contrato real tem m²/kg fracionários.
+model ContratoItem {
+  id              Int                   @id @default(autoincrement())
+  idContrato      Int
+  codigo          Int?
+  descricao       String
+  unidade         String
+  unidadeOriginal String?
+  quantidade      Float
+  valorUnitario   Float
+  valorTotal      Float
+  correcoes       String[]
+  recebido        Float                 @default(0)
+  consumido       Float                 @default(0)
+  contrato        Contrato              @relation(fields: [idContrato], references: [id])
+  movimentacoes   MovimentacaoEstoque[]
+  notaFiscalItems NotaFiscalItem[]
+  pedidoItems     PedidoItem[]
+
+  @@index([idContrato])
+  @@map("contrato_item")
+}
+
+// Dotação orçamentária de uma unidade beneficiária (GABINETE, EDUCAÇÃO, SAÚDE...).
+// É a fonte real do vínculo contrato ↔ secretaria.
+model ContratoDotacao {
+  id                    Int      @id @default(autoincrement())
+  idContrato            Int
+  unidadeCodigo         String
+  unidade               String
+  funcionalProgramatica String?
+  acao                  String?
+  ficha                 String?
+  elementoCodigo        String?
+  elementoDescricao     String?
+  naturezaCodigo        String?
+  natureza              String?
+  complemento           String?
+  contrato              Contrato @relation(fields: [idContrato], references: [id])
+
+  @@index([idContrato])
+  @@map("contrato_dotacao")
+}
+
+model ContratoSetor {
+  id         Int           @id @default(autoincrement())
+  idContrato Int
+  idSetor    Int
+  origem     OrigemVinculo @default(MANUAL)
+  contrato   Contrato      @relation(fields: [idContrato], references: [id])
+  setor      Setor         @relation(fields: [idSetor], references: [id])
+
+  @@unique([idContrato, idSetor])
   @@index([idSetor])
-  @@map("licitacao_setor")
+  @@map("contrato_setor")
 }
 
 model Pedido {
@@ -130,7 +228,7 @@ model Pedido {
   avaliacoes          Avaliacao[]
   movimentacoes       MovimentacaoEstoque[]
   notasFiscais        NotaFiscal[]
-  contrato            LicitacaoContrato     @relation(fields: [idContrato], references: [id])
+  contrato            Contrato              @relation(fields: [idContrato], references: [id])
   setor               Setor                 @relation("SolicitantePedido", fields: [idSetorCriador], references: [id])
   usuario             Usuario               @relation(fields: [idUsuarioCriador], references: [id])
   historico           PedidoHistorico[]
@@ -159,15 +257,15 @@ model PedidoHistorico {
 model PedidoItem {
   id             Int          @id @default(autoincrement())
   idPedido       Int
-  idItemLicitado Int
-  quantidade     Int
+  idContratoItem Int
+  quantidade     Float
   valorUnitario  Float
   valorTotal     Float
-  itemLicitado   ItemLicitado @relation(fields: [idItemLicitado], references: [id])
+  itemContrato   ContratoItem @relation(fields: [idContratoItem], references: [id])
   pedido         Pedido       @relation(fields: [idPedido], references: [id])
 
   @@index([idPedido])
-  @@index([idItemLicitado])
+  @@index([idContratoItem])
   @@map("pedido_item")
 }
 
@@ -180,7 +278,7 @@ model NotaFiscal {
   dataEntrada   DateTime              @default(now())
   observacao    String?
   movimentacoes MovimentacaoEstoque[]
-  contrato      LicitacaoContrato     @relation(fields: [idContrato], references: [id])
+  contrato      Contrato              @relation(fields: [idContrato], references: [id])
   pedido        Pedido                @relation(fields: [idPedido], references: [id])
   itens         NotaFiscalItem[]
 
@@ -191,51 +289,51 @@ model NotaFiscal {
 model NotaFiscalItem {
   id             Int          @id @default(autoincrement())
   idNotaFiscal   Int
-  idItemLicitado Int
-  quantidade     Int
+  idContratoItem Int
+  quantidade     Float
   valorUnitario  Float
   // Conferência do fiscal de contratos no ato do recebimento
   marcaConferida Boolean      @default(false)
-  itemLicitado   ItemLicitado @relation(fields: [idItemLicitado], references: [id])
+  itemContrato   ContratoItem @relation(fields: [idContratoItem], references: [id])
   notaFiscal     NotaFiscal   @relation(fields: [idNotaFiscal], references: [id])
 
   @@index([idNotaFiscal])
-  @@index([idItemLicitado])
+  @@index([idContratoItem])
   @@map("nota_fiscal_item")
 }
 
 model MovimentacaoEstoque {
   id             Int              @id @default(autoincrement())
   tipo           TipoMovimentacao
-  idItemLicitado Int
-  quantidade     Int
+  idContratoItem Int
+  quantidade     Float
   idNotaFiscal   Int?
   idPedido       Int?
   data           DateTime         @default(now())
   observacao     String?
-  itemLicitado   ItemLicitado     @relation(fields: [idItemLicitado], references: [id])
+  itemContrato   ContratoItem     @relation(fields: [idContratoItem], references: [id])
   notaFiscal     NotaFiscal?      @relation(fields: [idNotaFiscal], references: [id])
   pedido         Pedido?          @relation(fields: [idPedido], references: [id])
 
-  @@index([idItemLicitado])
+  @@index([idContratoItem])
   @@index([idNotaFiscal])
   @@map("movimentacao_estoque")
 }
 
 model Avaliacao {
-  id                Int               @id @default(autoincrement())
+  id                Int      @id @default(autoincrement())
   idPedido          Int
   idContrato        Int
   idUsuarioFiscal   Int
-  dataAvaliacao     DateTime          @default(now())
+  dataAvaliacao     DateTime @default(now())
   notaEntrega       Int
   notaPrazo         Int
-  possuiProblema    Boolean           @default(false)
+  possuiProblema    Boolean  @default(false)
   descricaoProblema String?
   observacao        String?
-  contrato          LicitacaoContrato @relation(fields: [idContrato], references: [id])
-  pedido            Pedido            @relation(fields: [idPedido], references: [id])
-  usuarioFiscal     Usuario           @relation(fields: [idUsuarioFiscal], references: [id])
+  contrato          Contrato @relation(fields: [idContrato], references: [id])
+  pedido            Pedido   @relation(fields: [idPedido], references: [id])
+  usuarioFiscal     Usuario  @relation(fields: [idUsuarioFiscal], references: [id])
 
   @@index([idContrato])
   @@index([idPedido])
@@ -257,7 +355,7 @@ model TermoRenovacao {
   idUsuarioLicitacao  Int?
   dataEmissao         DateTime             @default(now())
   dataResolucao       DateTime?
-  contrato            LicitacaoContrato    @relation(fields: [idContrato], references: [id])
+  contrato            Contrato             @relation(fields: [idContrato], references: [id])
   setorSolicitante    Setor?               @relation("SolicitanteTermo", fields: [idSetorSolicitante], references: [id])
   usuarioEmissor      Usuario              @relation("TermoEmissor", fields: [idUsuarioEmissor], references: [id])
   usuarioLicitacao    Usuario?             @relation("TermoResolvido", fields: [idUsuarioLicitacao], references: [id])
@@ -267,6 +365,7 @@ model TermoRenovacao {
   @@map("termo_renovacao")
 }
 
+// Tabela gravada pelo pacote `parsing` (mesmo banco). O backend não a usa.
 model pdf_data {
   id                 Int       @id @default(autoincrement())
   original_name      String
@@ -276,42 +375,6 @@ model pdf_data {
   structured_data    Json
   extraction_summary String?
   created_at         DateTime? @default(now()) @db.Timestamp(6)
-}
-
-model Contratante {
-  id                  Int                @id @default(autoincrement())
-  endereco            String?
-  CNPJ                String?
-  nomePrefeito        String?
-  cpfPrefeito         Int?
-  carteiraIdentidade  String?
-  idLicitacaoContrato Int?
-  licitacaoContrato   LicitacaoContrato? @relation(fields: [idLicitacaoContrato], references: [id])
-
-  @@map("contratante")
-}
-
-model Contratado {
-  id                  Int                @id @default(autoincrement())
-  nome                String?
-  endereco            String?
-  CNPJ                String?
-  idLicitacaoContrato Int?
-  licitacaoContrato   LicitacaoContrato? @relation(fields: [idLicitacaoContrato], references: [id])
-
-  @@map("contratado")
-}
-
-model Solicitacao {
-  id              Int           @id @default(autoincrement())
-  idUsuario       Int
-  idItemLicitado  Int
-  dataSolicitacao DateTime      @default(now())
-  quantPedida     Int
-  usuario         Usuario       @relation(fields: [idUsuario], references: [id])
-  itemLicitado    ItemLicitado  @relation(fields: [idItemLicitado], references: [id])
-
-  @@map("solicitacao")
 }
 
 enum FuncaoUsuario {
@@ -335,6 +398,29 @@ enum StatusContrato {
   EM_ADITAMENTO
   ENCERRADA
   VENCIDA
+}
+
+// Papel da parte no contrato.
+enum PapelParte {
+  CONTRATANTE
+  CONTRATADO
+}
+
+enum PapelSignatario {
+  CONTRATANTE
+  CONTRATADO
+  TESTEMUNHA
+}
+
+enum TipoDocumento {
+  CNPJ
+  CPF
+}
+
+// De onde saiu o vínculo contrato ↔ secretaria.
+enum OrigemVinculo {
+  DOTACAO
+  MANUAL
 }
 
 enum StatusPedido {

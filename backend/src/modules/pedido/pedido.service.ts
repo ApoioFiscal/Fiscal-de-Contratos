@@ -80,28 +80,28 @@ export class PedidoService {
       throw new ValidationError("Usuário sem setor vinculado");
     }
 
-    const itensDoPedido: { idItemLicitado: number; quantidade: number; valorUnitario: number }[] = [];
+    const itensDoPedido: { idContratoItem: number; quantidade: number; valorUnitario: number }[] = [];
     const erros: Record<string, string> = {};
 
     for (const itemInput of input.itens) {
-      const itemContrato = contrato.itens.find((item) => item.id === itemInput.idItemLicitado);
+      const itemContrato = contrato.itens.find((item) => item.id === itemInput.idContratoItem);
 
       if (!itemContrato) {
-        erros[`itens.${itemInput.idItemLicitado}`] = "Item não pertence a este contrato";
+        erros[`itens.${itemInput.idContratoItem}`] = "Item não pertence a este contrato";
         continue;
       }
 
-      const comprometido = await this.repository.somarComprometido(itemInput.idItemLicitado);
+      const comprometido = await this.repository.somarComprometido(itemInput.idContratoItem);
       const disponivel = itemContrato.quantidade - itemContrato.consumido - comprometido;
 
       if (itemInput.quantidade > disponivel) {
-        erros[`itens.${itemInput.idItemLicitado}`] =
+        erros[`itens.${itemInput.idContratoItem}`] =
           `Quantidade (${itemInput.quantidade}) excede o saldo disponível do item (${disponivel} ${itemContrato.unidade})`;
         continue;
       }
 
       itensDoPedido.push({
-        idItemLicitado: itemInput.idItemLicitado,
+        idContratoItem: itemInput.idContratoItem,
         quantidade: itemInput.quantidade,
         valorUnitario: itemContrato.precoUnitario,
       });
@@ -183,7 +183,7 @@ export class PedidoService {
       // chegou); se a NF ainda não foi lançada, cai para a quantidade pedida.
       const itensNota = pedido.notasFiscais?.[0]?.itens ?? [];
       const itensTermo = pedido.itens.map((item) => {
-        const conferido = itensNota.find((notaItem) => notaItem.idItemLicitado === item.idItemLicitado);
+        const conferido = itensNota.find((notaItem) => notaItem.idContratoItem === item.idContratoItem);
         const quantidade = conferido?.quantidade ?? item.quantidade;
         return { ...item, quantidade, valorTotal: item.valorUnitario * quantidade };
       });

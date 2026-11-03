@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import { ForbiddenError } from "./errors";
 
-const SIGLAS_LICITACOES = new Set(["LIC", "CPL", "LICITACAO", "LICITACOES"]);
+const SIGLAS_LICITACOES = new Set(["LIC", "CPL", "Contrato", "LICITACOES"]);
 const SIGLAS_CONTRATOS = new Set(["FC", "FCON", "FISCAL", "CONTRATOS", "FISCALIZACAO"]);
 const SIGLAS_COMPRAS = new Set(["CMP", "COMP", "COMPRAS"]);
 

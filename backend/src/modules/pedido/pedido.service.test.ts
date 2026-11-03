@@ -32,11 +32,11 @@ function pedidoFixture(status: StatusPedido) {
     itens: [
       {
         id: 11,
-        idItemLicitado: 100,
+        idContratoItem: 100,
         quantidade: 10,
         valorUnitario: 5,
         valorTotal: 50,
-        itemLicitado: { id: 100, descricao: "Dipirona 500mg", unidade: "UN" },
+        itemContrato: { id: 100, descricao: "Dipirona 500mg", unidade: "UN" },
       },
     ],
   };
@@ -328,7 +328,7 @@ test("termo e baixa usam as quantidades conferidas na nota fiscal", async () => 
         numeroNota: "NF-1",
         dataEmissao: new Date(),
         dataEntrada: new Date(),
-        itens: [{ idItemLicitado: 100, quantidade: 8, marcaConferida: true }],
+        itens: [{ idContratoItem: 100, quantidade: 8, marcaConferida: true }],
       },
     ],
   };
@@ -405,11 +405,11 @@ test("gerador do termo produz um pacote DOCX valido", async () => {
       setor: { nome: "Secretaria de Saúde" },
       itens: [
         {
-          idItemLicitado: 100,
+          idContratoItem: 100,
           quantidade: 10,
           valorUnitario: 5,
           valorTotal: 50,
-          itemLicitado: { descricao: "Dipirona 500mg", marca: "Genérico", unidade: "UN" },
+          itemContrato: { descricao: "Dipirona 500mg", marca: "Genérico", unidade: "UN" },
         },
       ],
     },

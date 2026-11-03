@@ -4,7 +4,7 @@ import { CreatePedidoInput, AtualizarStatusPedidoInput } from "../../common/sche
 import { NotFoundError } from "../../common/errors";
 
 export interface PedidoItemEntrada {
-  idItemLicitado: number;
+  idContratoItem: number;
   quantidade: number;
   valorUnitario: number;
 }
@@ -17,7 +17,7 @@ type CriarPedidoData = Omit<CreatePedidoInput, "itens"> & {
 const pedidoInclude = {
   itens: {
     include: {
-      itemLicitado: {
+      itemContrato: {
         select: {
           id: true,
           descricao: true,
@@ -35,8 +35,8 @@ const pedidoInclude = {
       numero: true,
       numeroProcesso: true,
       objeto: true,
-      fornecedor: true,
-      cnpjFornecedor: true,
+      valorTotal: true,
+      vigenciaFim: true,
     },
   },
   setor: {
@@ -52,7 +52,7 @@ const pedidoInclude = {
       dataEmissao: true,
       dataEntrada: true,
       itens: {
-        select: { idItemLicitado: true, quantidade: true, marcaConferida: true },
+        select: { idContratoItem: true, quantidade: true, marcaConferida: true },
       },
     },
     orderBy: { dataEntrada: "desc" as const },
@@ -65,7 +65,7 @@ const pedidoInclude = {
 
 export class PedidoRepository {
   async findContratoComSetoresEItens(id: number) {
-    return prisma.licitacaoContrato.findUnique({
+    return prisma.contrato.findUnique({
       where: { id },
       include: {
         setores: { select: { idSetor: true } },
@@ -83,10 +83,10 @@ export class PedidoRepository {
     });
   }
 
-  async somarComprometido(idItemLicitado: number): Promise<number> {
+  async somarComprometido(idContratoItem: number): Promise<number> {
     const itens = await prisma.pedidoItem.findMany({
       where: {
-        idItemLicitado,
+        idContratoItem,
         pedido: {
           status: {
             in: [
@@ -127,7 +127,7 @@ export class PedidoRepository {
         observacao: data.observacao ?? null,
         itens: {
           create: itens.map((item) => ({
-            idItemLicitado: item.idItemLicitado,
+            idContratoItem: item.idContratoItem,
             quantidade: item.quantidade,
             valorUnitario: item.valorUnitario,
             valorTotal: item.valorUnitario * item.quantidade,
@@ -178,10 +178,10 @@ export class PedidoRepository {
       const pedido = await tx.pedido.findUnique({
         where: { id },
         include: {
-          itens: { select: { idItemLicitado: true, quantidade: true } },
+          itens: { select: { idContratoItem: true, quantidade: true } },
           notasFiscais: {
             select: {
-              itens: { select: { idItemLicitado: true, quantidade: true } },
+              itens: { select: { idContratoItem: true, quantidade: true } },
             },
             orderBy: { dataEntrada: "desc" },
             take: 1,
@@ -241,18 +241,18 @@ export class PedidoRepository {
         const itensConferidos = pedido.notasFiscais[0]?.itens ?? [];
 
         for (const item of pedido.itens) {
-          const conferido = itensConferidos.find((n) => n.idItemLicitado === item.idItemLicitado);
+          const conferido = itensConferidos.find((n) => n.idContratoItem === item.idContratoItem);
           const quantidade = conferido?.quantidade ?? item.quantidade;
 
-          await tx.itemLicitado.update({
-            where: { id: item.idItemLicitado },
+          await tx.contratoItem.update({
+            where: { id: item.idContratoItem },
             data: { consumido: { increment: quantidade } },
           });
 
           await tx.movimentacaoEstoque.create({
             data: {
               tipo: TipoMovimentacao.BAIXA,
-              idItemLicitado: item.idItemLicitado,
+              idContratoItem: item.idContratoItem,
               idPedido: id,
               quantidade,
               observacao: "Baixa automática na conclusão do pedido",

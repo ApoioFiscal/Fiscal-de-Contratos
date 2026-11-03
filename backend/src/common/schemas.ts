@@ -2,7 +2,6 @@ import { z } from "zod";
 import {
   AcaoTomada,
   FuncaoUsuario,
-  StatusContrato,
   StatusPedido,
   StatusTermoRenovacao,
   TipoRenovacao,
@@ -62,47 +61,15 @@ export const UsuarioLoginSchema = z.object({
 
 export type LoginUserInput = z.infer<typeof UsuarioLoginSchema>;
 
-// ---- LICITAÇÕES / CONTRATOS ----
-
-export const ItemLicitadoSchema = z.object({
-  descricao: z.string().min(1, "Descrição do item é obrigatória").trim(),
-  marca: z.string().max(120).optional().default(""),
-  unidade: z.string().min(1, "Unidade é obrigatória").trim(),
-  quantidade: z.number().int().positive("Quantidade deve ser positiva"),
-  precoUnitario: z.number().positive("Preço unitário deve ser positivo"),
-});
-
-export type ItemLicitadoInput = z.infer<typeof ItemLicitadoSchema>;
-
-const STATUS_CONTRATO_VALUES = Object.values(StatusContrato) as [StatusContrato, ...StatusContrato[]];
-
-export const CreateLicitacaoSchema = z.object({
-  numero: z.string().min(1, "Número do contrato é obrigatório").trim(),
-  numeroProcesso: z.string().min(1, "Número do processo é obrigatório").trim(),
-  modalidade: z.string().min(1, "Modalidade é obrigatória").trim(),
-  objeto: z.string().min(1, "Objeto é obrigatório").trim(),
-  fornecedor: z.string().min(1, "Fornecedor é obrigatório").trim(),
-  cnpjFornecedor: z
-    .string()
-    .regex(/^\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}$/, "CNPJ inválido"),
-  dataAbertura: z.coerce.date("Data de abertura inválida"),
-  dataVigenciaFim: z.coerce.date("Data de vigência final inválida"),
-  status: z.enum(STATUS_CONTRATO_VALUES).optional().default(StatusContrato.RASCUNHO),
-  idSetores: z.array(z.number().int().positive()).min(1, "Selecione ao menos uma secretaria"),
-  itens: z.array(ItemLicitadoSchema).min(1, "Cadastre ao menos um item"),
-});
-
-export type CreateLicitacaoInput = z.infer<typeof CreateLicitacaoSchema>;
-
-export const UpdateLicitacaoSchema = CreateLicitacaoSchema.partial();
-
-export type UpdateLicitacaoInput = z.infer<typeof UpdateLicitacaoSchema>;
+// ---- CONTRATOS ----
+// O schema canônico do contrato (extração + revisão) vive em `contrato.schema.ts`,
+// porque espelha o extrator do pacote `parsing`.
 
 // ---- PEDIDOS ----
 
 export const PedidoItemSchema = z.object({
-  idItemLicitado: z.number().int().positive("Item inválido"),
-  quantidade: z.number().int().positive("Quantidade deve ser positiva"),
+  idContratoItem: z.number().int().positive("Item inválido"),
+  quantidade: z.number().positive("Quantidade deve ser positiva"),
 });
 
 export type PedidoItemInput = z.infer<typeof PedidoItemSchema>;
@@ -140,8 +107,8 @@ export type CreateAvisoPedidoInput = z.infer<typeof CreateAvisoPedidoSchema>;
 // ---- ESTOQUE (notas / baixas) ----
 
 export const NotaFiscalItemSchema = z.object({
-  idItemLicitado: z.number().int().positive("Item inválido"),
-  quantidade: z.number().int().positive("Quantidade da nota deve ser positiva"),
+  idContratoItem: z.number().int().positive("Item inválido"),
+  quantidade: z.number().positive("Quantidade da nota deve ser positiva"),
   valorUnitario: z.number().positive("Valor unitário inválido").optional(),
   marcaConferida: z.boolean().optional(),
 });
@@ -159,8 +126,8 @@ export const CreateNotaFiscalSchema = z.object({
 export type CreateNotaFiscalInput = z.infer<typeof CreateNotaFiscalSchema>;
 
 export const CreateBaixaSchema = z.object({
-  idItemLicitado: z.number().int().positive("Item inválido"),
-  quantidade: z.number().int().positive("Quantidade da baixa deve ser positiva"),
+  idContratoItem: z.number().int().positive("Item inválido"),
+  quantidade: z.number().positive("Quantidade da baixa deve ser positiva"),
   idPedido: z.number().int().positive().optional(),
   observacao: z.string().max(500).trim().optional(),
 });
@@ -168,7 +135,7 @@ export const CreateBaixaSchema = z.object({
 export type CreateBaixaInput = z.infer<typeof CreateBaixaSchema>;
 
 export const EstoqueQuerySchema = z.object({
-  itemLicitadoId: z.coerce.number().int().positive().optional(),
+  itemContratoId: z.coerce.number().int().positive().optional(),
   contratoId: z.coerce.number().int().positive().optional(),
 });
 
@@ -208,7 +175,7 @@ export type CreateTermoRenovacaoInput = z.infer<typeof CreateTermoRenovacaoSchem
 
 export const AtualizarTermoRenovacaoSchema = z.object({
   status: z.enum(STATUS_TERMO_VALUES),
-  parecerLicitacao: z.string().max(1000).trim().optional(),
+  parecerContrato: z.string().max(1000).trim().optional(),
   acaoTomada: z.enum(ACAO_TOMADA_VALUES).optional(),
 });
 
@@ -219,21 +186,3 @@ export const TermoRenovacaoQuerySchema = z.object({
 });
 
 export type TermoRenovacaoQuery = z.infer<typeof TermoRenovacaoQuerySchema>;
-
-export const CreateContratanteSchema=z.object({endereco:z.string().optional(),CNPJ:z.string().optional(),nomePrefeito:z.string().optional(),cpfPrefeito:z.number().int().optional(),carteiraIdentidade:z.string().optional(),idLicitacaoContrato:z.number().int().positive().optional()});
-export type CreateContratanteInput=z.infer<typeof CreateContratanteSchema>;
-export const UpdateContratanteSchema=CreateContratanteSchema.partial();
-export type UpdateContratanteInput=z.infer<typeof UpdateContratanteSchema>;
-
-
-
-export const CreateSolicitacaoSchema=z.object({idUsuario:z.number().int().positive('Usuario invalido'),idItemLicitado:z.number().int().positive('Item invalido'),dataSolicitacao:z.coerce.date().optional(),quantPedida:z.number().int().positive('Quantidade deve ser positiva')});
-export type CreateSolicitacaoInput=z.infer<typeof CreateSolicitacaoSchema>;
-export const UpdateSolicitacaoSchema=CreateSolicitacaoSchema.partial();
-export type UpdateSolicitacaoInput=z.infer<typeof UpdateSolicitacaoSchema>;
-
-
-export const CreateContratadoSchema=z.object({nome:z.string().optional(),endereco:z.string().optional(),CNPJ:z.string().optional(),idLicitacaoContrato:z.number().int().positive().optional()});
-export type CreateContratadoInput=z.infer<typeof CreateContratadoSchema>;
-export const UpdateContratadoSchema=CreateContratadoSchema.partial();
-export type UpdateContratadoInput=z.infer<typeof UpdateContratadoSchema>;

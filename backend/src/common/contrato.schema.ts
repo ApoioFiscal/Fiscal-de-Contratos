@@ -138,6 +138,8 @@ export const ContratoExtractionSchema = z.object({
   avisos: z.array(z.string()),
 });
 
+export type ContratoExtraction = z.infer<typeof ContratoExtractionSchema>;
+
 export type ContratoExtractionInput = z.infer<typeof ContratoExtractionSchema>;
 
 /**

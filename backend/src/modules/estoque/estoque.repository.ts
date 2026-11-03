@@ -13,7 +13,7 @@ export interface EntradaNotaParams {
 
 export class EstoqueRepository {
   async contratoExiste(id: number): Promise<boolean> {
-    const contrato = await prisma.licitacaoContrato.findUnique({
+    const contrato = await prisma.contrato.findUnique({
       where: { id },
       select: { id: true },
     });
@@ -25,7 +25,7 @@ export class EstoqueRepository {
       const pedido = await tx.pedido.findUnique({
         where: { id: params.idPedido },
         include: {
-          itens: { select: { idItemLicitado: true, quantidade: true, valorUnitario: true } },
+          itens: { select: { idContratoItem: true, quantidade: true, valorUnitario: true } },
           contrato: { select: { id: true, numero: true } },
         },
       });
@@ -47,18 +47,18 @@ export class EstoqueRepository {
       const porItem = new Map<number, { quantidade: number; valorUnitario: number }>();
 
       for (const linha of params.itens) {
-        const linhaPedido = pedido.itens.find((i) => i.idItemLicitado === linha.idItemLicitado);
+        const linhaPedido = pedido.itens.find((i) => i.idContratoItem === linha.idContratoItem);
 
         if (!linhaPedido) {
-          erros[`itens.${linha.idItemLicitado}`] = "Item não consta neste pedido";
+          erros[`itens.${linha.idContratoItem}`] = "Item não consta neste pedido";
           continue;
         }
 
         // A quantidade recebida pode exceder a quantidade pedida (empresa pode
         // entregar a mais). O valor recebido entra no estoque e fica registrado
         // na movimentação; a baixa automática na conclusão consome o pedido.
-        porItem.set(linha.idItemLicitado, {
-          quantidade: (porItem.get(linha.idItemLicitado)?.quantidade ?? 0) + linha.quantidade,
+        porItem.set(linha.idContratoItem, {
+          quantidade: (porItem.get(linha.idContratoItem)?.quantidade ?? 0) + linha.quantidade,
           valorUnitario: linha.valorUnitario ?? linhaPedido.valorUnitario,
         });
       }
@@ -76,9 +76,9 @@ export class EstoqueRepository {
           observacao: params.observacao ?? null,
           itens: {
             create: params.itens.map((linha) => {
-              const linhaPedido = pedido.itens.find((i) => i.idItemLicitado === linha.idItemLicitado)!;
+              const linhaPedido = pedido.itens.find((i) => i.idContratoItem === linha.idContratoItem)!;
               return {
-                idItemLicitado: linha.idItemLicitado,
+                idContratoItem: linha.idContratoItem,
                 quantidade: linha.quantidade,
                 valorUnitario: linha.valorUnitario ?? linhaPedido.valorUnitario,
                 marcaConferida: linha.marcaConferida ?? false,
@@ -88,7 +88,7 @@ export class EstoqueRepository {
           movimentacoes: {
             create: params.itens.map((linha) => ({
               tipo: TipoMovimentacao.ENTRADA,
-              idItemLicitado: linha.idItemLicitado,
+              idContratoItem: linha.idContratoItem,
               idPedido: pedido.id,
               quantidade: linha.quantidade,
               observacao: `Entrada por NF ${params.numeroNota}`,
@@ -98,7 +98,7 @@ export class EstoqueRepository {
         include: {
           itens: {
             include: {
-              itemLicitado: { select: { id: true, descricao: true, unidade: true } },
+              itemContrato: { select: { id: true, descricao: true, unidade: true } },
             },
           },
           movimentacoes: true,
@@ -108,7 +108,7 @@ export class EstoqueRepository {
       });
 
       for (const [itemId, agregado] of porItem) {
-        await tx.itemLicitado.update({
+        await tx.contratoItem.update({
           where: { id: itemId },
           data: { recebido: { increment: agregado.quantidade } },
         });
@@ -123,7 +123,7 @@ export class EstoqueRepository {
 
   async baixa(input: CreateBaixaInput) {
     return prisma.$transaction(async (tx) => {
-      const item = await tx.itemLicitado.findUnique({ where: { id: input.idItemLicitado } });
+      const item = await tx.contratoItem.findUnique({ where: { id: input.idContratoItem } });
 
       if (!item) {
         throw new NotFoundError("Item licitado");
@@ -135,7 +135,7 @@ export class EstoqueRepository {
         throw new ValidationError(`Estoque disponível insuficiente (${disponivelFisico} ${item.unidade})`);
       }
 
-      await tx.itemLicitado.update({
+      await tx.contratoItem.update({
         where: { id: item.id },
         data: { consumido: { increment: input.quantidade } },
       });
@@ -143,13 +143,13 @@ export class EstoqueRepository {
       const movimentacao = await tx.movimentacaoEstoque.create({
         data: {
           tipo: TipoMovimentacao.BAIXA,
-          idItemLicitado: item.id,
+          idContratoItem: item.id,
           idPedido: input.idPedido ?? null,
           quantidade: input.quantidade,
           observacao: input.observacao ?? "Baixa por consumo",
         },
         include: {
-          itemLicitado: { select: { id: true, descricao: true, unidade: true } },
+          itemContrato: { select: { id: true, descricao: true, unidade: true } },
         },
       });
 
@@ -160,19 +160,19 @@ export class EstoqueRepository {
   async listarMovimentacoes(query: EstoqueQuery) {
     const where: Record<string, unknown> = {};
 
-    if (query.itemLicitadoId) {
-      where.idItemLicitado = query.itemLicitadoId;
+    if (query.itemContratoId) {
+      where.idContratoItem = query.itemContratoId;
     }
 
     if (query.contratoId) {
-      where.itemLicitado = { idLicitacao: query.contratoId };
+      where.itemContrato = { idContrato: query.contratoId };
     }
 
     return prisma.movimentacaoEstoque.findMany({
       where,
       include: {
-        itemLicitado: {
-          select: { id: true, descricao: true, unidade: true, idLicitacao: true },
+        itemContrato: {
+          select: { id: true, descricao: true, unidade: true, idContrato: true },
         },
         pedido: { select: { id: true, numeroPedido: true } },
         notaFiscal: { select: { id: true, numeroNota: true } },
@@ -182,8 +182,8 @@ export class EstoqueRepository {
   }
 
   async resumoContrato(idContrato: number) {
-    return prisma.itemLicitado.findMany({
-      where: { idLicitacao: idContrato },
+    return prisma.contratoItem.findMany({
+      where: { idContrato: idContrato },
       select: {
         id: true,
         descricao: true,

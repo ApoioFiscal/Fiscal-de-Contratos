@@ -7,19 +7,18 @@ const termoInclude = {
     select: {
       id: true,
       numero: true,
-      fornecedor: true,
-      dataVigenciaFim: true,
+      vigenciaFim: true,
       status: true,
     },
   },
   usuarioEmissor: { select: { id: true, nome: true } },
-  usuarioLicitacao: { select: { id: true, nome: true } },
+  usuarioContrato: { select: { id: true, nome: true } },
   setorSolicitante: { select: { id: true, nome: true, sigla: true } },
 } as const;
 
 export class TermoRenovacaoRepository {
   async findContratoComSetores(id: number) {
-    return prisma.licitacaoContrato.findUnique({
+    return prisma.contrato.findUnique({
       where: { id },
       select: {
         id: true,
