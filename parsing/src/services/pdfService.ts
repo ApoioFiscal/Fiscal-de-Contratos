@@ -1,3 +1,9 @@
+// O `pdf-parse` carrega `@napi-rs/canvas` via createRequire dinâmico para
+// preencher DOMMatrix/ImageData/Path2D (usa `new DOMMatrix` no topo do módulo).
+// A análise estática da Vercel não enxerga esse require, então o pacote ficava
+// fora do bundle e a função morria com "DOMMatrix is not defined". Este import
+// explícito garante que o pacote (e o binário linux-x64-gnu) entre no bundle.
+import '@napi-rs/canvas';
 import { PDFParse, type TableResult, type TextResult } from 'pdf-parse';
 import { readFile } from 'fs/promises';
 import { savePdfDocument } from './dbService';
