@@ -159,11 +159,15 @@ const maskCnpj = (digits: string) =>
 
 const maskCpf = (digits: string) => digits.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, '$1.$2.$3-$4');
 
+const CNPJ_DIGITS = String.raw`\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2}`;
+
 const findCnpj = (value: string): string | null => {
-  const match = value.match(
-    new RegExp(String.raw`CNPJ${LABEL_GAP}(\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2})`, 'i'),
-  );
-  return match ? maskCnpj(match[1].replace(/\D/g, '')) : null;
+  // Com rótulo (aceita "CNPJ sob o nº", "CNPJ/MF n°", lixo de OCR) ...
+  const labeled = value.match(new RegExp(String.raw`CNPJ(?:\/MF)?[^\d]{0,25}?(${CNPJ_DIGITS})`, 'i'));
+  if (labeled) return maskCnpj(labeled[1].replace(/\D/g, ''));
+  // ... ou o primeiro número com máscara de CNPJ, mesmo sem rótulo legível.
+  const bare = value.match(/\b(\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2})\b/);
+  return bare ? maskCnpj(bare[1].replace(/\D/g, '')) : null;
 };
 
 const findCpf = (value: string): string | null => {
@@ -230,8 +234,7 @@ export const isContrato = (text: string): boolean => {
   const hasTitle =
     /TERMO\s+DE\s+CONTRATO/i.test(head) || new RegExp(String.raw`CONTRATO\s+${NUM}\d`, 'i').test(head);
   const hasParties =
-    /doravante\s+simplesmente\s+CONTRATANTE/i.test(flat) &&
-    /doravante\s+simplesmente\s+CONTRATAD[OA]/i.test(flat);
+    new RegExp(MARK_CONTRATANTE, 'i').test(flat) && new RegExp(MARK_CONTRATADO, 'i').test(flat);
   const clauseCount = (flat.match(/CL[ÁA]USULA\s+/gi) ?? []).length;
 
   return (hasTitle || hasParties) && clauseCount >= 3;
@@ -344,7 +347,13 @@ const parseParte = (papel: ParteContrato['papel'], clause: string | null): Parte
 
   const cnpj = findCnpj(head);
   const cpf = cnpj ? null : findCpf(head);
-  const withoutDocument = head.replace(/,?\s*(?:CNPJ|CPF)\b.*$/i, '');
+  const withoutDocument = head
+    .replace(/,?\s*(?:inscrit[oa]\s+(?:no|sob)\s+(?:o\s+)?)?(?:CNPJ|CPF)\b.*$/i, '')
+    .replace(/,?\s*com\s+sede\s+(?:na|no|em)\b.*$/i, '')
+    .replace(/^\s*(?:a|o)\s+(?:empresa|pessoa\s+jur[íi]dica|munic[íi]pio\s+de)\s+(?=\S)/i, (m) =>
+      /munic/i.test(m) ? 'Município de ' : '',
+    )
+    .replace(/^\s*(?:de\s+(?:um|outro)\s+lado|do\s+outro\s+lado|e)\s+/i, '');
   const { nome, endereco } = splitNomeEndereco(withoutDocument);
 
   return {
@@ -355,6 +364,142 @@ const parseParte = (papel: ParteContrato['papel'], clause: string | null): Parte
     endereco: endereco ? fixOcrDigitsInWords(endereco) : null,
     representante: representanteText ? parsePessoa(representanteText) : null,
   };
+};
+
+
+// ---------------------------------------------------------------- localização das partes
+
+const DORAVANTE = String.raw`(?:,?\s*(?:doravante|daqui\s+por\s+diante|a\s+seguir)\s+(?:simplesmente\s+|denominad[oa]\s+|designad[oa]\s+|chamad[oa]\s+|apenas\s+)?(?:de\s+|como\s+)?)`;
+const MARK_CONTRATANTE = String.raw`${DORAVANTE}["“”']?CONTRATANTE`;
+const MARK_CONTRATADO = String.raw`${DORAVANTE}["“”']?CONTRATAD[O0A]`;
+
+/**
+ * Localiza o trecho de qualificação de cada parte. Tenta, em ordem:
+ *  1) "de um lado <X> doravante (simplesmente|denominado) CONTRATANTE ... de/do outro (lado) <Y> doravante ... CONTRATADO"
+ *  2) o mesmo, sem "de um lado"/"do outro lado", usando só o marcador "doravante ... CONTRATANTE/CONTRATADO"
+ *  3) rótulos "CONTRATANTE: <X>." e "CONTRATADA: <Y>."
+ */
+const locatePartyClauses = (flat: string): { contratanteClause: string | null; contratadoClause: string | null } => {
+  const reContratado = new RegExp(
+    String.raw`(?:(?:e\s+)?d[eo]\s+outro(?:\s+lado)?|e)\s+(.+?)\s*${MARK_CONTRATADO}`,
+    'i',
+  );
+
+  let contratanteClause: string | null = null;
+  let contratadoClause: string | null = null;
+
+  // Âncora no "de um lado": evita que o preâmbulo ("Pelo presente instrumento...") entre no nome.
+  const lado1 = flat.match(new RegExp(String.raw`de\s+um\s+lado\s+(.+?)\s*${MARK_CONTRATANTE}`, 'i'));
+  contratanteClause = lado1?.[1] ?? null;
+
+  if (!contratanteClause) {
+    const idx = flat.search(new RegExp(MARK_CONTRATANTE, 'i'));
+    if (idx !== -1) {
+      const before = flat.slice(Math.max(0, idx - 500), idx);
+      contratanteClause = before.split(/\b(?:Pelo\s+presente|celebram|firmam|Entre)\b[^,.]*[,:.]?/i).pop()?.trim() || null;
+    }
+  }
+
+  const afterContratante = (() => {
+    const m = new RegExp(MARK_CONTRATANTE, 'i').exec(flat);
+    return m ? flat.slice(m.index + m[0].length) : flat;
+  })();
+
+  const lado2 = afterContratante.match(
+    new RegExp(String.raw`(?:e\s+)?d[eo]\s+outro(?:\s+lado)?\s+(.+?)\s*${MARK_CONTRATADO}`, 'i'),
+  );
+  contratadoClause = lado2?.[1] ?? null;
+
+  if (!contratadoClause) {
+    const m = afterContratante.match(reContratado);
+    contratadoClause = m?.[1] ?? null;
+  }
+
+  // 3) Formato com rótulos "CONTRATANTE: ..." / "CONTRATADA: ..."
+  if (!contratanteClause) {
+    contratanteClause = flat.match(/CONTRATANTE\s*:\s*(.+?)(?=\s+CONTRATAD[OA]\s*:|\s+CL[ÁA]USULA|$)/i)?.[1] ?? null;
+  }
+  if (!contratadoClause) {
+    contratadoClause = flat.match(/CONTRATAD[OA]\s*:\s*(.+?)(?=\s+CL[ÁA]USULA|\s+Pelo\s+presente|$)/i)?.[1] ?? null;
+  }
+
+  return { contratanteClause, contratadoClause };
+};
+
+/** Prefeitura de títulos como "...CELEBRAM A PREFEITURA MUNICIPAL DE X E <FORNECEDOR>, PARA ...". */
+const titleParties = (flat: string): { contratante: string | null; contratado: string | null } => {
+  const head = flat.slice(0, HEAD_SIZE);
+  const m = head.match(
+    /CELEBRAM\s+(?:A\s+|O\s+)?((?:PREFEITURA|MUNIC[ÍI]PIO|C[ÂA]MARA|FUNDO|SECRETARIA)[^,]*?)\s+E\s+(.+?)(?=\s*[,.:]|\s+PARA\b|\s+TENDO\b|\s+COM\s+O\s+OBJETO|\s+Pelo\s+presente\b|\s+CL[ÁA]USULA\b|\s+CNPJ\b|$)/i,
+  );
+  const limit = (v: string | null) => (v && v.length <= 150 ? v : null);
+  return { contratante: limit(clean(m?.[1])), contratado: limit(clean(m?.[2])) };
+};
+
+const normName = (value: string | null) => stripAccents(value ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+
+/**
+ * Completa o que a qualificação das partes não entregou (OCR ruim ou redação fora do padrão):
+ *  - nome do contratante/contratado a partir do título do termo;
+ *  - CNPJ do contratado: o primeiro CNPJ do documento que não seja o do contratante.
+ */
+const fillParteFallbacks = (
+  parte: ParteContrato,
+  flat: string,
+  papel: ParteContrato['papel'],
+  contratante?: ParteContrato,
+): ParteContrato => {
+  const filled = { ...parte };
+  const title = titleParties(flat);
+
+  if (!filled.nome) {
+    const fromTitle = papel === 'CONTRATANTE' ? title.contratante : title.contratado;
+    if (fromTitle) filled.nome = fixOcrDigitsInWords(fromTitle);
+  }
+
+  if (papel === 'CONTRATADO' && !filled.documento) {
+    const all = [...flat.matchAll(/\b(\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2})\b/g)].map((m) => m[1]);
+    const other = all.find((cnpj) => cnpj !== contratante?.documento);
+    if (other) {
+      filled.documento = other;
+      filled.tipo_documento = 'CNPJ';
+    }
+  }
+
+  // Nome do contratado igual ao da prefeitura é sinal de captura errada.
+  if (papel === 'CONTRATADO' && contratante?.nome && normName(filled.nome) === normName(contratante.nome)) {
+    filled.nome = title.contratado ? fixOcrDigitsInWords(title.contratado) : null;
+  }
+
+  return filled;
+};
+
+// ---------------------------------------------------------------- contratante fixo
+
+/**
+ * O contratante é sempre a própria prefeitura. Quando configurado (env), o valor configurado
+ * vence o que o OCR leu — evita "MAR1ZOPOLIS" e afins. O representante (prefeito) continua
+ * vindo do texto.
+ */
+const applyContratanteFixo = (parte: ParteContrato): ParteContrato => {
+  const nome = process.env.CONTRATANTE_NOME?.trim() || DEFAULT_CONTRATANTE.nome;
+  const cnpjRaw = process.env.CONTRATANTE_CNPJ?.trim() || DEFAULT_CONTRATANTE.cnpj;
+  const endereco = process.env.CONTRATANTE_ENDERECO?.trim() || DEFAULT_CONTRATANTE.endereco;
+  const digits = cnpjRaw.replace(/\D/g, '');
+
+  return {
+    ...parte,
+    nome: nome || parte.nome,
+    documento: digits.length === 14 ? maskCnpj(digits) : parte.documento,
+    tipo_documento: digits.length === 14 ? 'CNPJ' : parte.tipo_documento,
+    endereco: parte.endereco ?? (endereco || null),
+  };
+};
+
+const DEFAULT_CONTRATANTE = {
+  nome: 'Prefeitura Municipal de Marizópolis',
+  cnpj: '01.612.941/0001-49',
+  endereco: '',
 };
 
 // ---------------------------------------------------------------- identificação
@@ -891,15 +1036,12 @@ export const extractContrato = (text: string): ContratoExtraction => {
     .filter((line) => line && !/^--\s*\d+\s+of\s+\d+\s*--$/i.test(line));
 
   // Partes
-  const contratanteClause = flat.match(
-    /de\s+um\s+lado\s+(.+?)\s*,?\s*doravante\s+simplesmente\s+CONTRATANTE/i,
-  )?.[1] ?? null;
-  const contratadoClause = flat.match(
-    /(?:e\s+)?do\s+outro\s+lado\s+(.+?)\s*,?\s*doravante\s+simplesmente\s+CONTRATAD[OA]/i,
-  )?.[1] ?? null;
+  const { contratanteClause, contratadoClause } = locatePartyClauses(flat);
 
-  const contratante = parseParte('CONTRATANTE', contratanteClause);
-  const contratado = parseParte('CONTRATADO', contratadoClause);
+  const contratante = applyContratanteFixo(
+    fillParteFallbacks(parseParte('CONTRATANTE', contratanteClause), flat, 'CONTRATANTE'),
+  );
+  const contratado = fillParteFallbacks(parseParte('CONTRATADO', contratadoClause), flat, 'CONTRATADO', contratante);
 
   // Identificação
   const { modalidade, numero: numeroModalidade } = extractModalidade(text);

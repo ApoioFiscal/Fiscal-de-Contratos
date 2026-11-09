@@ -27,7 +27,15 @@ export class ContratoService {
   async importarArquivo(buffer: Buffer, nomeOriginal: string): Promise<ContratoResposta> {
     const { contrato, avisos } = await this.parsing.importarDocumento({ buffer, nomeOriginal });
 
-    const dados = ContratoExtractionSchema.parse(contrato);
+    const validado = ContratoExtractionSchema.safeParse(contrato);
+    if (!validado.success) {
+      const campos = validado.error.issues
+        .slice(0, 5)
+        .map((issue) => `${issue.path.join(".")}: ${issue.message}`)
+        .join("; ");
+      throw new ValidationError(`Os dados extraídos do PDF não passaram na validação (${campos}).`);
+    }
+    const dados = validado.data;
     const createData = mapearParaCriar(dados);
 
     const contratoCriado = await this.repository.importar({

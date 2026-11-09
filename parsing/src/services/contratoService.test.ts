@@ -217,8 +217,21 @@ PELO CONTRATADO
 MARIA SOUZA
 `;
 
+// O contratante é fixo (a prefeitura) e vem da configuração; aqui simulamos outra prefeitura.
+const withContratanteEnv = <T>(nome: string, cnpj: string, fn: () => T): T => {
+  const old = { nome: process.env.CONTRATANTE_NOME, cnpj: process.env.CONTRATANTE_CNPJ };
+  process.env.CONTRATANTE_NOME = nome;
+  process.env.CONTRATANTE_CNPJ = cnpj;
+  try {
+    return fn();
+  } finally {
+    if (old.nome === undefined) delete process.env.CONTRATANTE_NOME; else process.env.CONTRATANTE_NOME = old.nome;
+    if (old.cnpj === undefined) delete process.env.CONTRATANTE_CNPJ; else process.env.CONTRATANTE_CNPJ = old.cnpj;
+  }
+};
+
 test('contrato sintético: outra modalidade, contratado com representante, vigência por duração', () => {
-  const c = extractContrato(SINTETICO);
+  const c = withContratanteEnv('Município de Exemplo', '12.345.678/0001-90', () => extractContrato(SINTETICO));
 
   assert.equal(c.numero_contrato, '045/2026');
   assert.equal(c.numero_processo, '2026/0456');
@@ -320,4 +333,67 @@ test('item ilegível gera aviso e NÃO engole o item seguinte', () => {
   // a soma dos itens lidos (5.000) não confere com o contrato (6.250): precisa ser sinalizado
   assert.equal(c.validacoes.soma_itens_confere_valor_do_contrato, false);
   assert.ok(c.avisos.some((a) => /não confere/.test(a)));
+});
+
+// ------------------------------------------------------------------ variações de redação das partes
+
+const TAIL = `
+CLÁUSULA PRIMEIRA - DOS FUNDAMENTOS:
+Lei Federal nº 14.133.
+CLÁUSULA SEGUNDA - DO OBJETO:
+O presente contrato tem por objeto: AQUISIÇÃO DE MATERIAL.
+CLÁUSULA TERCEIRA - DO VALOR E PREÇOS:
+Total: 10,00
+CLÁUSULA QUARTA - DO PRAZO E DA VIGÊNCIA:
+O prazo de vigência será de 12 (doze) meses.
+`;
+const HEAD = `CONTRATO Nº 001/2026
+TERMO DE CONTRATO QUE ENTRE SI CELEBRAM A PREFEITURA MUNICIPAL DE MARIZÓPOLIS E EMPRESA XYZ LTDA
+`;
+
+const PARTES_VARIANTES: Record<string, string> = {
+  'denominado/denominada + "inscrito no CNPJ sob o nº"':
+    'Pelo presente instrumento, de um lado o MUNICÍPIO DE MARIZÓPOLIS, inscrito no CNPJ sob o nº 01.612.941/0001-49, doravante denominado CONTRATANTE, e de outro lado a empresa EMPRESA XYZ LTDA, inscrita no CNPJ sob o nº 11.222.333/0001-44, com sede na Rua A, 10, doravante denominada CONTRATADA, decidiram',
+  'rótulos CONTRATANTE: / CONTRATADA:':
+    'CONTRATANTE: Prefeitura Municipal de Marizópolis, CNPJ 01.612.941/0001-49.\nCONTRATADA: EMPRESA XYZ LTDA, CNPJ 11.222.333/0001-44.\n',
+  'sem "simplesmente"':
+    'Pelo presente instrumento, de um lado a PREFEITURA MUNICIPAL DE MARIZÓPOLIS, CNPJ 01.612.941/0001-49, doravante CONTRATANTE, e do outro EMPRESA XYZ LTDA, CNPJ 11.222.333/0001-44, doravante CONTRATADA, decidiram',
+  '"e de outro lado" e CNPJ em outra linha':
+    'Pelo presente instrumento, de um lado Prefeitura Municipal de Marizópolis, CNPJ 01.612.941/0001-49, doravante simplesmente CONTRATANTE, e de outro lado EMPRESA XYZ LTDA\nCNPJ 11.222.333/0001-44 doravante simplesmente CONTRATADA, decidiram',
+};
+
+for (const [nome, trecho] of Object.entries(PARTES_VARIANTES)) {
+  test(`partes: ${nome}`, () => {
+    const texto = HEAD + trecho + TAIL;
+    assert.equal(isContrato(texto), true);
+
+    const c = extractContrato(texto);
+    assert.equal(c.contratante.nome, 'Prefeitura Municipal de Marizópolis');
+    assert.equal(c.contratante.documento, '01.612.941/0001-49');
+    assert.equal(c.contratado.nome, 'EMPRESA XYZ LTDA');
+    assert.equal(c.contratado.documento, '11.222.333/0001-44');
+    assert.equal(c.contratado.tipo_documento, 'CNPJ');
+  });
+}
+
+test('partes: contratante fixo vence o que o OCR leu errado', () => {
+  const texto =
+    HEAD +
+    'Pelo presente instrumento, de um lado Prefeitura Municipal de MAR1ZOPOLIS, CNPJ 01.612.94l/0001-49, doravante simplesmente CONTRATANTE, e do outro lado EMPRESA XYZ LTDA, CNPJ 11.222.333/0001-44, doravante simplesmente CONTRATADA, decidiram' +
+    TAIL;
+  const c = extractContrato(texto);
+  assert.equal(c.contratante.nome, 'Prefeitura Municipal de Marizópolis');
+  assert.equal(c.contratante.documento, '01.612.941/0001-49');
+  assert.equal(c.contratado.nome, 'EMPRESA XYZ LTDA');
+});
+
+test('partes: sem qualificação legível, fornecedor sai do título e o CNPJ é o que não é da prefeitura', () => {
+  const texto =
+    HEAD +
+    'Pelo presente instrumento as partes abaixo assinam. Prefeitura CNPJ 01.612.941/0001-49. Fornecedor CNPJ 11.222.333/0001-44.' +
+    TAIL;
+  const c = extractContrato(texto);
+  assert.equal(c.contratante.nome, 'Prefeitura Municipal de Marizópolis');
+  assert.equal(c.contratado.nome, 'EMPRESA XYZ LTDA');
+  assert.equal(c.contratado.documento, '11.222.333/0001-44');
 });

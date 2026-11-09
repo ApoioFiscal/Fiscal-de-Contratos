@@ -10,7 +10,14 @@ const upload = multer({
   // Na Vercel o diretório do projeto é read-only; o único local gravável é /tmp.
   dest: join(tmpdir(), 'apoiofiscal-parsing'),
   fileFilter: (_req, file, callback) => {
-    if (file.mimetype !== 'application/pdf') {
+    // Alguns clientes mandam PDF como application/octet-stream (ou sem tipo). A assinatura
+    // "%PDF-" é validada de verdade em pdfService, então aqui só barramos tipos claramente errados.
+    const mime = (file.mimetype || '').toLowerCase();
+    const isPdfName = /\.pdf$/i.test(file.originalname || '');
+    const aceito = mime === 'application/pdf' || mime === 'application/x-pdf' ||
+      ((mime === 'application/octet-stream' || mime === '') && isPdfName);
+
+    if (!aceito) {
       callback(new Error('Apenas arquivos PDF sao aceitos.'));
       return;
     }
@@ -18,7 +25,8 @@ const upload = multer({
     callback(null, true);
   },
   limits: {
-    fileSize: 15 * 1024 * 1024,
+    // Mesmo teto do backend (express.raw 20mb); PDFs escaneados costumam passar de 15MB.
+    fileSize: 20 * 1024 * 1024,
   },
 });
 

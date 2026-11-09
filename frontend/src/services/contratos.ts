@@ -38,7 +38,16 @@ export async function obterContrato(id: number): Promise<Contrato> {
   return apiRequest<Contrato>(`/contratos/${id}`);
 }
 
+const LIMITE_PDF_BYTES = 20 * 1024 * 1024;
+
 export async function importarContratoArquivo(arquivo: File): Promise<ImportacaoContratoResult> {
+  if (arquivo.type !== "application/pdf" && !/\.pdf$/i.test(arquivo.name)) {
+    throw new Error("Selecione um arquivo PDF.");
+  }
+  if (arquivo.size > LIMITE_PDF_BYTES) {
+    throw new Error("O PDF é grande demais (limite de 20 MB).");
+  }
+
   const token = localStorage.getItem("token");
 
   // O backend espera o PDF cru (Content-Type application/pdf) e o encaminha ao parsing.
@@ -56,11 +65,21 @@ export async function importarContratoArquivo(arquivo: File): Promise<Importacao
   );
 
   const payload = (await response.json().catch(() => null)) as
-    | { success?: boolean; data?: ImportacaoContratoResult }
+    | {
+        success?: boolean;
+        data?: ImportacaoContratoResult;
+        error?: { message?: string; details?: Record<string, unknown> };
+      }
     | null;
 
   if (!response.ok || !payload?.success || !payload.data) {
-    throw new Error("Falha ao importar o contrato a partir do PDF.");
+    const mensagem =
+      payload?.error?.message ??
+      (response.status === 401 ? "Sessão expirada. Faça login novamente." : null) ??
+      (response.status === 403 ? "Seu perfil não pode importar contratos." : null) ??
+      (response.status === 413 ? "O PDF é grande demais (limite de 20 MB)." : null) ??
+      `Falha ao importar o contrato a partir do PDF (HTTP ${response.status}).`;
+    throw new Error(mensagem);
   }
 
   // Recarrega o contrato persistido para devolver o estado completo (com itens,
