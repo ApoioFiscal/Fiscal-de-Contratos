@@ -4,3 +4,6 @@ dist/
 src/generated/
 uploads/
 *.log
+.vercel
+.env*
+!.env.example

@@ -1,32 +1,14 @@
 import "dotenv/config";
-import express from "express";
-import cors from "cors"; // Importando o CORS
-import { router } from "./routes";
-import { errorHandler } from "./common/middleware";
+import app from "./app";
 
-const app = express();
-const PORT = process.env.PORT ?? 3333; 
+const PORT = process.env.PORT ?? 3333;
 
-// Liberando o CORS para aceitar requisições do frontend (localhost:5173)
-app.use(cors());
+// Na Vercel o app é importado e executado como Function; não há listener.
+// Localmente (npm run dev) subimos o servidor normalmente.
+if (!process.env.VERCEL) {
+  app.listen(PORT, () => {
+    console.log(`Servidor rodando em http://localhost:${PORT}`);
+  });
+}
 
-app.use(express.json({ limit: "10mb" }));
-// Importação de contrato: o PDF cru chega aqui antes do parser JSON.
-app.use(express.raw({ type: "application/pdf", limit: "20mb" }));
-app.use("/api", router);
-
-// Health check para monitoramento externo (Render/Vercel/professor)
-app.get("/health", (_req, res) => {
-  res.json({ status: "ok" });
-});
-// Também exposto sob /api para quem só conhece o prefixo dos endpoints
-app.get("/api/health", (_req, res) => {
-  res.json({ status: "ok" });
-});
-
-// Middleware de tratamento de erros 
-app.use(errorHandler);
-
-app.listen(PORT, () => {
-  console.log(`Servidor rodando em http://localhost:${PORT}`);
-});
+export default app;

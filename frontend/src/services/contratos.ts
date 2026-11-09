@@ -1,6 +1,10 @@
 import { apiRequest } from "./api";
 import type { Contrato } from "@/types/domain";
 
+// Em produção o backend é outro projeto na Vercel; em desenvolvimento o Vite
+// faz proxy de `/api` para localhost:3333 (ver vite.config.ts).
+const API_BASE_URL = import.meta.env.VITE_API_URL ?? "/api";
+
 /** Resposta do `POST /api/contratos/importar` (após parsing + Zod + persistência). */
 export type ImportacaoContratoResult = {
   id: number;
@@ -39,14 +43,17 @@ export async function importarContratoArquivo(arquivo: File): Promise<Importacao
 
   // O backend espera o PDF cru (Content-Type application/pdf) e o encaminha ao parsing.
   // O nome vai na query (?nome=) porque o corpo não é multipart.
-  const response = await fetch(`/api/contratos/importar?nome=${encodeURIComponent(arquivo.name)}`, {
-    method: "POST",
-    headers: {
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      "Content-Type": "application/pdf",
-    },
-    body: arquivo,
-  });
+  const response = await fetch(
+    `${API_BASE_URL}/contratos/importar?nome=${encodeURIComponent(arquivo.name)}`,
+    {
+      method: "POST",
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        "Content-Type": "application/pdf",
+      },
+      body: arquivo,
+    }
+  );
 
   const payload = (await response.json().catch(() => null)) as
     | { success?: boolean; data?: ImportacaoContratoResult }
@@ -71,7 +78,7 @@ export async function atualizarContrato(id: number, payload: AtualizarContratoPa
 
 export async function baixarArquivoContrato(id: number): Promise<Blob> {
   const token = localStorage.getItem("token");
-  const response = await fetch(`/api/contratos/${id}/arquivo`, {
+  const response = await fetch(`${API_BASE_URL}/contratos/${id}/arquivo`, {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
   if (!response.ok) {

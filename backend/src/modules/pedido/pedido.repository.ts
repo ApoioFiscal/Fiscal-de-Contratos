@@ -176,7 +176,7 @@ export class PedidoRepository {
     status: StatusPedido,
     input: AtualizarStatusPedidoInput,
     idUsuario: number,
-    arquivoTermo?: string
+    arquivoTermo?: { filename: string; conteudo: Buffer }
   ) {
     return prisma.$transaction(async (tx) => {
       const pedido = await tx.pedido.findUnique({
@@ -205,7 +205,7 @@ export class PedidoRepository {
       }
 
       if (status === StatusPedido.CONCLUIDO && arquivoTermo) {
-        data.arquivoTermo = arquivoTermo;
+        data.arquivoTermo = arquivoTermo.filename;
         data.dataGeracaoTermo = new Date();
       }
 
@@ -214,6 +214,23 @@ export class PedidoRepository {
       }
 
       const atualizado = await tx.pedido.update({ where: { id }, data });
+
+      if (status === StatusPedido.CONCLUIDO && arquivoTermo) {
+        await tx.pedidoTermo.upsert({
+          where: { idPedido: id },
+          create: {
+            idPedido: id,
+            filename: arquivoTermo.filename,
+            // Prisma 7 tipa `Bytes` como `Uint8Array<ArrayBuffer>`; o Buffer do
+            // Node carrega `ArrayBufferLike`, então copiamos para um Uint8Array.
+            conteudo: new Uint8Array(arquivoTermo.conteudo),
+          },
+          update: {
+            filename: arquivoTermo.filename,
+            conteudo: new Uint8Array(arquivoTermo.conteudo),
+          },
+        });
+      }
 
       await tx.pedidoHistorico.create({
         data: {
@@ -267,6 +284,10 @@ export class PedidoRepository {
 
       return atualizado;
     }).then(() => this.findById(id));
+  }
+
+  async findTermo(idPedido: number) {
+    return prisma.pedidoTermo.findUnique({ where: { idPedido } });
   }
 
   async registrarAviso(id: number, idUsuario: number, mensagem: string) {

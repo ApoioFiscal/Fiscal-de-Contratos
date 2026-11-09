@@ -1,7 +1,5 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import path from "node:path";
-import { existsSync, promises as fs } from "node:fs";
 import { StatusPedido } from "@prisma/client";
 import { PedidoService } from "./pedido.service";
 import { PedidoRepository } from "./pedido.repository";
@@ -18,7 +16,7 @@ interface RegistroStatus {
   status: StatusPedido;
   input: { status: StatusPedido; numeroOrdem?: string; aviso?: string; cpf?: string; observacao?: string };
   idUsuario: number;
-  arquivoTermo?: string;
+  arquivoTermo?: { filename: string; conteudo: Buffer };
 }
 
 function pedidoFixture(status: StatusPedido) {
@@ -42,7 +40,13 @@ function pedidoFixture(status: StatusPedido) {
   };
 }
 
-function criarRepoFake(opcoes: { pedido?: unknown; ordensPorSetor?: number } = {}) {
+function criarRepoFake(
+  opcoes: {
+    pedido?: unknown;
+    ordensPorSetor?: number;
+    termo?: { filename: string; conteudo: Uint8Array } | null;
+  } = {}
+) {
   const chamadas = { countOrdens: 0, updateStatus: [] as RegistroStatus[] };
   const repo = {
     async findById() {
@@ -57,10 +61,13 @@ function criarRepoFake(opcoes: { pedido?: unknown; ordensPorSetor?: number } = {
       status: StatusPedido,
       input: RegistroStatus["input"],
       idUsuario: number,
-      arquivoTermo?: string
+      arquivoTermo?: RegistroStatus["arquivoTermo"]
     ) {
       chamadas.updateStatus.push({ id, status, input, idUsuario, arquivoTermo });
       return { id, status };
+    },
+    async findTermo() {
+      return opcoes.termo ?? null;
     },
   } as unknown as PedidoRepository;
   return { repo, chamadas };
@@ -170,20 +177,16 @@ test("ENTREGUE permite concluir (gera termo) com CPF valido", async () => {
   const geradorFake = { gerar: async () => Buffer.from("fake-docx") } as unknown as GeradorTermoRecebimentoDocx;
   const service = new PedidoService(repo, geradorFake);
 
-  const arquivo = path.join(process.cwd(), "uploads", "termos", "TERMO-RECEBIMENTO-REQ-001.docx");
-  try {
-    await service.atualizarStatus(
-      1,
-      { id: 10, nome: "Fiscal de Teste", perfil: "fiscal" },
-      { status: StatusPedido.CONCLUIDO, cpf: "529.982.247-25" }
-    );
+  await service.atualizarStatus(
+    1,
+    { id: 10, nome: "Fiscal de Teste", perfil: "fiscal" },
+    { status: StatusPedido.CONCLUIDO, cpf: "529.982.247-25" }
+  );
 
-    assert.equal(chamadas.updateStatus.length, 1);
-    assert.equal(chamadas.updateStatus[0].status, StatusPedido.CONCLUIDO);
-    assert.equal(chamadas.updateStatus[0].arquivoTermo, "TERMO-RECEBIMENTO-REQ-001.docx");
-  } finally {
-    await fs.rm(arquivo, { force: true });
-  }
+  assert.equal(chamadas.updateStatus.length, 1);
+  assert.equal(chamadas.updateStatus[0].status, StatusPedido.CONCLUIDO);
+  assert.equal(chamadas.updateStatus[0].arquivoTermo?.filename, "TERMO-RECEBIMENTO-REQ-001.docx");
+  assert.equal(chamadas.updateStatus[0].arquivoTermo?.conteudo.toString(), "fake-docx");
 });
 
 test("ENTREGUE permite devolver ou cancelar o pedido", async () => {
@@ -291,32 +294,23 @@ test("CONCLUIDO sem CPF valido gera ValidationError e nao persiste termo", async
 });
 
 test("CONCLUIDO com CPF valido gera e persiste o termo de recebimento", async () => {
-  const termosDir = path.join(process.cwd(), "uploads", "termos");
-  const arquivo = path.join(termosDir, "TERMO-RECEBIMENTO-REQ-001.docx");
   const geradorFake = {
     gerar: async () => Buffer.from("fake-docx"),
   } as unknown as GeradorTermoRecebimentoDocx;
 
-  try {
-    const { repo, chamadas } = criarRepoFake({ pedido: pedidoFixture(StatusPedido.ENTREGUE) });
-    const service = new PedidoService(repo, geradorFake);
+  const { repo, chamadas } = criarRepoFake({ pedido: pedidoFixture(StatusPedido.ENTREGUE) });
+  const service = new PedidoService(repo, geradorFake);
 
-    await service.atualizarStatus(
-      1,
-      { id: 10, nome: "Fiscal de Teste", perfil: "fiscal" },
-      { status: StatusPedido.CONCLUIDO, cpf: "529.982.247-25" }
-    );
+  await service.atualizarStatus(
+    1,
+    { id: 10, nome: "Fiscal de Teste", perfil: "fiscal" },
+    { status: StatusPedido.CONCLUIDO, cpf: "529.982.247-25" }
+  );
 
-    assert.equal(chamadas.updateStatus.length, 1);
-    assert.equal(chamadas.updateStatus[0].status, StatusPedido.CONCLUIDO);
-    assert.equal(chamadas.updateStatus[0].arquivoTermo, "TERMO-RECEBIMENTO-REQ-001.docx");
-
-    assert.equal(existsSync(arquivo), true, "arquivo do termo deve existir em uploads/termos");
-    const conteudo = await fs.readFile(arquivo, "utf8");
-    assert.equal(conteudo, "fake-docx");
-  } finally {
-    await fs.rm(arquivo, { force: true });
-  }
+  assert.equal(chamadas.updateStatus.length, 1);
+  assert.equal(chamadas.updateStatus[0].status, StatusPedido.CONCLUIDO);
+  assert.equal(chamadas.updateStatus[0].arquivoTermo?.filename, "TERMO-RECEBIMENTO-REQ-001.docx");
+  assert.equal(chamadas.updateStatus[0].arquivoTermo?.conteudo.toString(), "fake-docx");
 });
 
 test("termo e baixa usam as quantidades conferidas na nota fiscal", async () => {
@@ -343,20 +337,15 @@ test("termo e baixa usam as quantidades conferidas na nota fiscal", async () => 
   } as unknown as GeradorTermoRecebimentoDocx;
   const service = new PedidoService(repo, geradorFake);
 
-  const arquivo = path.join(process.cwd(), "uploads", "termos", "TERMO-RECEBIMENTO-REQ-001.docx");
-  try {
-    await service.atualizarStatus(
-      1,
-      { id: 10, nome: "Fiscal de Teste", perfil: "fiscal" },
-      { status: StatusPedido.CONCLUIDO, cpf: "529.982.247-25" }
-    );
+  await service.atualizarStatus(
+    1,
+    { id: 10, nome: "Fiscal de Teste", perfil: "fiscal" },
+    { status: StatusPedido.CONCLUIDO, cpf: "529.982.247-25" }
+  );
 
-    assert.equal(itensRecebidos.length, 1);
-    assert.equal(itensRecebidos[0].quantidade, 8, "deve usar a quantidade conferida na NF");
-    assert.equal(itensRecebidos[0].valorTotal, 40, "valor total recalculado pela quantidade conferida");
-  } finally {
-    await fs.rm(arquivo, { force: true });
-  }
+  assert.equal(itensRecebidos.length, 1);
+  assert.equal(itensRecebidos[0].quantidade, 8, "deve usar a quantidade conferida na NF");
+  assert.equal(itensRecebidos[0].valorTotal, 40, "valor total recalculado pela quantidade conferida");
 });
 
 test("obterArquivoTermo falha quando termo ainda nao foi gerado", async () => {
@@ -371,25 +360,16 @@ test("obterArquivoTermo falha quando termo ainda nao foi gerado", async () => {
   );
 });
 
-test("obterArquivoTermo retorna o caminho do arquivo salvo", async () => {
+test("obterArquivoTermo retorna o conteudo salvo no banco", async () => {
   const { repo } = criarRepoFake({
     pedido: { ...pedidoFixture(StatusPedido.CONCLUIDO), arquivoTermo: "TERMO-RECEBIMENTO-REQ-001.docx" },
+    termo: { filename: "TERMO-RECEBIMENTO-REQ-001.docx", conteudo: Buffer.from("fake-docx") },
   });
   const service = new PedidoService(repo);
 
-  // O arquivo existe? Criamos um placeholder só para o teste de caminho não
-  // ser bloqueado pelo existsSync.
-  const caminho = path.join(process.cwd(), "uploads", "termos", "TERMO-RECEBIMENTO-REQ-001.docx");
-  const zero = Buffer.alloc(0);
-  try {
-    await fs.mkdir(path.dirname(caminho), { recursive: true });
-    await fs.writeFile(caminho, zero);
-    const { caminho: obtido, filename } = await service.obterArquivoTermo(1);
-    assert.equal(filename, "TERMO-RECEBIMENTO-REQ-001.docx");
-    assert.equal(obtido, caminho);
-  } finally {
-    await fs.rm(caminho, { force: true });
-  }
+  const { conteudo, filename } = await service.obterArquivoTermo(1);
+  assert.equal(filename, "TERMO-RECEBIMENTO-REQ-001.docx");
+  assert.equal(conteudo.toString(), "fake-docx");
 });
 
 // ---------------------------------------------------------------------------

@@ -233,10 +233,24 @@ model Pedido {
   usuario             Usuario               @relation(fields: [idUsuarioCriador], references: [id])
   historico           PedidoHistorico[]
   itens               PedidoItem[]
+  termo               PedidoTermo?
 
   @@index([idSetorCriador])
   @@index([idContrato])
   @@map("pedido")
+}
+
+// DOCX do Termo de Recebimento. Fica no banco porque a Vercel não tem disco
+// persistente entre invocações de Functions: o arquivo precisa sobreviver ao
+// request que o gerou e estar disponível em qualquer instância.
+model PedidoTermo {
+  idPedido Int      @id
+  filename String
+  conteudo Bytes
+  criadoEm DateTime @default(now())
+  pedido   Pedido   @relation(fields: [idPedido], references: [id], onDelete: Cascade)
+
+  @@map("pedido_termo")
 }
 
 model PedidoHistorico {

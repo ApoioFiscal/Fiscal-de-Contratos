@@ -1,12 +1,8 @@
-import path from "path";
-import { existsSync } from "fs";
 import { ContratoExtractionSchema, AtualizarContratoSchema, AtualizarContratoInput } from "../../common/contrato.schema";
 import { ContratoRepository } from "./contrato.repository";
 import { ParsingClient } from "./parsingClient";
 import { mapearParaCriar, ContratoCreateData } from "./conversorContrato";
 import { NotFoundError, ValidationError } from "../../common/errors";
-
-const CONTRATOS_DIR = path.join(process.cwd(), "uploads", "contratos");
 
 export type ContratoResposta = {
   id: number;

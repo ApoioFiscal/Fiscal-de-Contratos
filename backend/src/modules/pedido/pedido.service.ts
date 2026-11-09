@@ -1,14 +1,10 @@
 import { StatusPedido } from "@prisma/client";
-import path from "path";
-import { existsSync, promises as fs } from "fs";
 import { PedidoRepository } from "./pedido.repository";
 import { CreatePedidoInput, AtualizarStatusPedidoInput } from "../../common/schemas";
 import { ForbiddenError, NotFoundError, ValidationError } from "../../common/errors";
 import { PerfilAcesso } from "../../common/perfil";
 import { GeradorTermoRecebimentoDocx } from "./geradorTermoRecebimento";
 import { gerarNumeroOrdem } from "./pedidoUtils";
-
-const TERMOS_DIR = path.join(process.cwd(), "uploads", "termos");
 
 interface UsuarioAutenticado {
   id: number;
@@ -166,7 +162,7 @@ export class PedidoService {
     }
 
     let dados = { ...input };
-    let arquivoTermo: string | undefined;
+    let arquivoTermo: { filename: string; conteudo: Buffer } | undefined;
 
     if (input.status === StatusPedido.CONFIRMADO) {
       const totalOrdens = await this.repository.countOrdensPorSetor(pedido.idSetorCriador);
@@ -200,9 +196,9 @@ export class PedidoService {
       );
 
       const filename = `TERMO-RECEBIMENTO-${pedido.numeroPedido.replace(/[^a-zA-Z0-9-_]/g, "_")}.docx`;
-      await fs.mkdir(TERMOS_DIR, { recursive: true });
-      await fs.writeFile(path.join(TERMOS_DIR, filename), buffer);
-      arquivoTermo = filename;
+      // Guardamos o DOCX no Postgres (PedidoTermo) em vez do disco: na Vercel
+      // o filesystem é efêmero e não é compartilhado entre invocações.
+      arquivoTermo = { filename, conteudo: buffer };
     }
 
     return this.repository.updateStatus(id, input.status, dados, user.id, arquivoTermo);
@@ -222,15 +218,12 @@ export class PedidoService {
     if (!pedido) {
       throw new NotFoundError("Pedido");
     }
-    if (!pedido.arquivoTermo) {
+
+    const termo = await this.repository.findTermo(id);
+    if (!termo) {
       throw new NotFoundError("Termo de recebimento");
     }
 
-    const caminho = path.join(TERMOS_DIR, pedido.arquivoTermo);
-    if (!existsSync(caminho)) {
-      throw new NotFoundError("Arquivo do termo de recebimento");
-    }
-
-    return { caminho, filename: pedido.arquivoTermo };
+    return { conteudo: Buffer.from(termo.conteudo), filename: termo.filename };
   }
 }

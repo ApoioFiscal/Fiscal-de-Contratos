@@ -1,11 +1,14 @@
 import { NextFunction, Request, Response, Router } from 'express';
 import multer from 'multer';
+import { tmpdir } from 'os';
+import { join } from 'path';
 import { handleUpload } from '../controllers/uploadController';
 
 const router = Router();
 
 const upload = multer({
-  dest: 'uploads/',
+  // Na Vercel o diretório do projeto é read-only; o único local gravável é /tmp.
+  dest: join(tmpdir(), 'apoiofiscal-parsing'),
   fileFilter: (_req, file, callback) => {
     if (file.mimetype !== 'application/pdf') {
       callback(new Error('Apenas arquivos PDF sao aceitos.'));

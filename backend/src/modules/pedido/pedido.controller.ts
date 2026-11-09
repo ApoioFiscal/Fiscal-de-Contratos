@@ -55,9 +55,10 @@ export class PedidoController {
 
   async downloadTermoRecebimento(req: Request, res: Response): Promise<void> {
     const id = Number(req.params.id);
-    const { caminho, filename } = await this.service.obterArquivoTermo(id);
+    const { conteudo, filename } = await this.service.obterArquivoTermo(id);
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
     res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
-    res.sendFile(caminho);
+    // Buffer vindo do Postgres (PedidoTermo) — funciona em qualquer instância.
+    res.send(conteudo);
   }
 }
