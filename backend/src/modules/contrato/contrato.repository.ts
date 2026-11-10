@@ -3,7 +3,7 @@ import { StatusContrato } from "@prisma/client";
 import { Prisma } from "@prisma/client";
 import { ContratoCreateData } from "./conversorContrato";
 import { AtualizarContratoInput } from "../../common/contrato.schema";
-import { NotFoundError } from "../../common/errors";
+import { NotFoundError, DuplicateContratoError } from "../../common/errors";
 
 const contratoInclude = {
   partes: true,
@@ -83,31 +83,38 @@ export class ContratoRepository {
       if (setor) setoresPorUnidade.set(chave, { idSetor: setor.id });
     }
 
-    const contrato = await prisma.contrato.create({
-      data: {
-        ...input.data,
-        status: StatusContrato.RASCUNHO,
-        setores: {
-          create: [...setoresPorUnidade.entries()]
-            .filter(([, v]) => v.idSetor > 0)
-            .map(([chave, v]) => {
-              const origem = dotacoes.some(
-                (d) => String(d?.unidade ?? "").trim().toLowerCase() === chave,
-              )
-                ? "DOTACAO"
-                : "MANUAL";
+    try {
+      return await prisma.contrato.create({
+        data: {
+          ...input.data,
+          status: StatusContrato.RASCUNHO,
+          setores: {
+            create: [...setoresPorUnidade.entries()]
+              .filter(([, v]) => v.idSetor > 0)
+              .map(([chave, v]) => {
+                const origem = dotacoes.some(
+                  (d) => String(d?.unidade ?? "").trim().toLowerCase() === chave,
+                )
+                  ? "DOTACAO"
+                  : "MANUAL";
 
-              return { origem, setor: { connect: { id: v.idSetor } } };
-            }),
+                return { origem, setor: { connect: { id: v.idSetor } } };
+              }),
+          },
         },
-      },
-      include: {
-        ...contratoInclude,
-        setores: { include: { setor: true }, orderBy: { id: "asc" } },
-      },
-    });
-
-    return contrato;
+        include: {
+          ...contratoInclude,
+          setores: { include: { setor: true }, orderBy: { id: "asc" } },
+        },
+      });
+    } catch (error) {
+      // Corrida entre duas importações do mesmo PDF: o service checa antes, mas
+      // quem perder a corrida recebe o mesmo 409 em vez de um 500.
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+        throw new DuplicateContratoError(input.data.numero);
+      }
+      throw error;
+    }
   }
 
   async atualizar(id: number, input: AtualizarContratoInput) {

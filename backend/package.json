@@ -7,7 +7,9 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "postinstall": "prisma generate",
-    "test": "node --test -r ts-node/register src/common/contrato.schema.test.ts src/modules/pedido/pedido.service.test.ts src/modules/usuario/usuario.service.test.ts src/modules/setor/setor.service.test.ts"
+    "test": "node --test -r ts-node/register src/common/contrato.schema.test.ts src/modules/contrato/contrato.service.test.ts src/modules/pedido/pedido.service.test.ts src/modules/usuario/usuario.service.test.ts src/modules/setor/setor.service.test.ts",
+    "seed": "ts-node-dev --transpile-only prisma/seed.ts",
+    "seed:contrato-e2e": "ts-node-dev --transpile-only prisma/seed-contrato-e2e.ts"
   },
   "engines": {
     "node": "22.x"

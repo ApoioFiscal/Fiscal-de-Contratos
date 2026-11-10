@@ -2,6 +2,7 @@
 export enum ErrorCode {
   DUPLICATE_SIGLA = "DUPLICATE_SIGLA",
   DUPLICATE_EMAIL = "DUPLICATE_EMAIL",
+  DUPLICATE_CONTRATO = "DUPLICATE_CONTRATO",
   SETOR_NOT_FOUND = "SETOR_NOT_FOUND",
   USUARIO_NOT_FOUND = "USUARIO_NOT_FOUND",
   INVALID_ID = "INVALID_ID",
@@ -49,6 +50,20 @@ export class DuplicateEmailError extends AppError {
       409
     );
     this.name = "DuplicateEmailError";
+  }
+}
+
+export class DuplicateContratoError extends AppError {
+  constructor(numero?: string | null) {
+    const identificacao = numero?.trim();
+    super(
+      ErrorCode.DUPLICATE_CONTRATO,
+      identificacao
+        ? `O contrato ${identificacao} já foi importado. Exclua o contrato existente antes de reimportar.`
+        : "Este contrato já foi importado. Exclua o contrato existente antes de reimportar.",
+      409
+    );
+    this.name = "DuplicateContratoError";
   }
 }
 

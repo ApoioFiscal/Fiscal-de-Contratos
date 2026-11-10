@@ -56,11 +56,15 @@ export async function importarContratoArquivo(arquivo: File): Promise<Importacao
   );
 
   const payload = (await response.json().catch(() => null)) as
-    | { success?: boolean; data?: ImportacaoContratoResult }
+    | { success?: boolean; data?: ImportacaoContratoResult; error?: { message?: string } }
     | null;
 
   if (!response.ok || !payload?.success || !payload.data) {
-    throw new Error("Falha ao importar o contrato a partir do PDF.");
+    // O backend devolve mensagens úteis (ex.: contrato já importado → 409);
+    // mostra-las na tela evita o genérico "Falha ao importar".
+    throw new Error(
+      payload?.error?.message ?? "Falha ao importar o contrato a partir do PDF.",
+    );
   }
 
   // Recarrega o contrato persistido para devolver o estado completo (com itens,

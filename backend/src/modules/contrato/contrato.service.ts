@@ -2,7 +2,7 @@ import { ContratoExtractionSchema, AtualizarContratoSchema, AtualizarContratoInp
 import { ContratoRepository } from "./contrato.repository";
 import { ParsingClient } from "./parsingClient";
 import { mapearParaCriar, ContratoCreateData } from "./conversorContrato";
-import { NotFoundError, ValidationError } from "../../common/errors";
+import { NotFoundError, ValidationError, DuplicateContratoError } from "../../common/errors";
 
 export type ContratoResposta = {
   id: number;
@@ -29,6 +29,14 @@ export class ContratoService {
 
     const dados = ContratoExtractionSchema.parse(contrato);
     const createData = mapearParaCriar(dados);
+
+    // `numero` é único no banco: reimportar o mesmo PDF precisa devolver 409
+    // (com instrução de exclusão) em vez do 500 genérico do P2002.
+    const numero = createData.numero.trim();
+    if (numero) {
+      const existente = await this.repository.findByNumero(numero);
+      if (existente) throw new DuplicateContratoError(numero);
+    }
 
     const contratoCriado = await this.repository.importar({
       data: createData,
