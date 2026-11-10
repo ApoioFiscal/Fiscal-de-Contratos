@@ -1,6 +1,5 @@
 -- Script para excluir o contrato semeado (00141/2026-SDC) e todos os seus dependentes.
 -- Execute com: psql -d prefeitura -f backend/prisma/excluir_contrato.sql
--- Ou via Render: connect to the database and run these statements.
 
 -- 1. Identificar o contrato
 DO $$
