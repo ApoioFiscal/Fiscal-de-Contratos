@@ -2,5 +2,10 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "express",
   "installCommand": "npm install --include=dev",
-  "regions": ["gru1"]
+  "regions": ["gru1"],
+  "functions": {
+    "src/app.ts": {
+      "includeFiles": "node_modules/pdf-parse/dist/pdf-parse/cjs/pdf.worker.mjs"
+    }
+  }
 }
