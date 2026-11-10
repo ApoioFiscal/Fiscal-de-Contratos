@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { ContratoExtractionSchema } from "./contrato.schema";
+import { mapearParaCriar } from "../modules/contrato/conversorContrato";
 
 /**
  * Contrato entre os pacotes: o backend só aceita como contrato o que o extrator do
@@ -71,6 +72,30 @@ test("contrato real: dados que a tela de revisão usa estão presentes", () => {
   assert.equal(contrato.signatarios[2].nome, null);
   assert.equal(contrato.signatarios[2].legivel, false);
   assert.ok(contrato.avisos.length >= 3);
+});
+
+test("mapeamento para o Prisma usa camelCase nos signatários", () => {
+  const contrato = ContratoExtractionSchema.parse(
+    JSON.parse(readFileSync(GOLDEN, "utf8")),
+  );
+
+  const data = mapearParaCriar(contrato);
+  const signatarios = data.signatarios.create;
+
+  assert.ok(signatarios.length > 0);
+  for (const signatario of signatarios) {
+    // Prisma rejeita `orgao_emissor_rg`/`estado_civil`/`confirmado_no_bloco_de_assinatura`;
+    // esses campos precisam chegar como camelCase, senão o create quebra em runtime.
+    assert.ok(!("orgao_emissor_rg" in signatario));
+    assert.ok(!("estado_civil" in signatario));
+    assert.ok(!("confirmado_no_bloco_de_assinatura" in signatario));
+    assert.ok("orgaoEmissorRg" in signatario);
+    assert.ok("estadoCivil" in signatario);
+    assert.ok("confirmadoNoBloco" in signatario);
+  }
+
+  assert.equal(signatarios[0].orgaoEmissorRg, "SSP/PB");
+  assert.equal(signatarios[1].confirmadoNoBloco, true);
 });
 
 test("schema rejeita contrato sem as partes (não inventa dados)", () => {

@@ -95,10 +95,28 @@ export const mapearParaCriar = (data: ContratoExtraction): ContratoCreateData =>
       ],
     },
     signatarios: {
-      create: parsed.signatarios.map((s, i) => ({
-        ...SignatarioContratoSchema.parse(s),
-        ordem: i,
-      })),
+      create: parsed.signatarios.map((s, i) => {
+        const signatario = SignatarioContratoSchema.parse(s);
+        // O schema de extração usa snake_case (fica em `dadosExtraidos`), mas o
+        // model Prisma usa camelCase. Espalhar o objeto cru aqui quebra o
+        // `prisma.contrato.create` (ex.: "Unknown argument `orgao_emissor_rg`").
+        return {
+          papel: signatario.papel,
+          ordem: i,
+          nome: signatario.nome,
+          cargo: signatario.cargo,
+          cpf: signatario.cpf,
+          cnpj: signatario.cnpj,
+          rg: signatario.rg,
+          orgaoEmissorRg: signatario.orgao_emissor_rg,
+          nacionalidade: signatario.nacionalidade,
+          estadoCivil: signatario.estado_civil,
+          profissao: signatario.profissao,
+          endereco: signatario.endereco,
+          confirmadoNoBloco: signatario.confirmado_no_bloco_de_assinatura,
+          legivel: signatario.legivel,
+        };
+      }),
     },
     itens: {
       create: parsed.itens.map((item) => ({
