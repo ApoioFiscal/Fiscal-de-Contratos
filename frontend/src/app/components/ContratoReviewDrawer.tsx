@@ -100,11 +100,14 @@ const textoOuNull = (valor: string) => {
   const limpo = valor.trim();
   return limpo ? limpo : null;
 };
-const numero = (valor: string) => {
+// Nomes propositalmente diferentes do estado `numero` (número do contrato):
+// antes o helper se chamava `numero` e era sombreado pelo useState, o que
+// quebrava a renderização da lista de itens (`numero is not a function`).
+const paraNumero = (valor: string) => {
   const convertido = Number(valor.replace(",", "."));
   return Number.isFinite(convertido) ? convertido : 0;
 };
-const numeroOuNull = (valor: string) => {
+const paraNumeroOuNull = (valor: string) => {
   if (!valor.trim()) return null;
   const convertido = Number(valor.replace(",", "."));
   return Number.isFinite(convertido) ? convertido : null;
@@ -382,14 +385,14 @@ export function ContratoReviewDrawer({
     return {
       prazo_execucao: temExecucao
         ? {
-            quantidade: numero(prazoExecucaoQuantidade),
+            quantidade: paraNumero(prazoExecucaoQuantidade),
             unidade: prazoExecucaoUnidade.trim() || "dias",
             marco: textoOuNull(prazoExecucaoMarco),
           }
         : null,
       prazo_pagamento: temPagamento
         ? {
-            quantidade: numero(prazoPagamentoQuantidade),
+            quantidade: paraNumero(prazoPagamentoQuantidade),
             unidade: prazoPagamentoUnidade.trim() || "dias",
           }
         : null,
@@ -439,13 +442,13 @@ export function ContratoReviewDrawer({
 
     const itensPayload: ItemContratoPayload[] = itens.map((item) => ({
       id: item.id,
-      codigo: numeroOuNull(item.codigo),
+      codigo: paraNumeroOuNull(item.codigo),
       descricao: item.descricao.trim(),
       unidade: item.unidade.trim(),
       unidadeOriginal: textoOuNull(item.unidadeOriginal),
-      quantidade: numero(item.quantidade),
-      valorUnitario: numero(item.valorUnitario),
-      valorTotal: item.valorTotal.trim() ? numero(item.valorTotal) : undefined,
+      quantidade: paraNumero(item.quantidade),
+      valorUnitario: paraNumero(item.valorUnitario),
+      valorTotal: item.valorTotal.trim() ? paraNumero(item.valorTotal) : undefined,
       correcoes: item.correcoes,
     }));
 
@@ -468,7 +471,7 @@ export function ContratoReviewDrawer({
       modalidade: textoOuNull(modalidade),
       numeroModalidade: textoOuNull(numeroModalidade),
       objeto: textoOuNull(objeto),
-      valorTotal: numeroOuNull(valorTotal),
+      valorTotal: paraNumeroOuNull(valorTotal),
       vigenciaInicio: textoOuNull(vigenciaInicio),
       vigenciaFim: textoOuNull(vigenciaFim),
       vigenciaFimCalculada: contrato.vigenciaFimCalculada,
@@ -1054,7 +1057,7 @@ export function ContratoReviewDrawer({
           >
             <div className="space-y-4">
               {itens.map((item, indice) => {
-                const totalSugerido = numero(item.quantidade) * numero(item.valorUnitario);
+                const totalSugerido = paraNumero(item.quantidade) * paraNumero(item.valorUnitario);
                 return (
                   <div key={item.key} className="border border-slate-200 rounded-xl p-4 space-y-4">
                     <div className="flex items-center justify-between gap-3">

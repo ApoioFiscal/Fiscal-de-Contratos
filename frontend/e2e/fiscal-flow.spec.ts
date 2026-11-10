@@ -173,6 +173,11 @@ test.describe("Secretaria de Licitações (lic@marizopolis.gov.br)", () => {
     await expect(drawer).toBeVisible();
     await expect(drawer.getByText("Dados gerais")).toBeVisible();
 
+    // A lista de itens precisa renderizar (o total sugerido usa a conversão
+    // numérica dos campos). Regressão: um helper `numero()` sombreado pelo
+    // estado `numero` quebrava a barra lateral com "is not a function".
+    await expect(drawer.getByText(/Sugerido \(qtd × unitário\)/).first()).toBeVisible();
+
     // O seed do E2E não cria signatários; a revisão manual serve justamente para
     // preencher o que o OCR não trouxe. Se já houver testemunha, só corrige o nome.
     const nomeTestemunha = drawer.getByLabel("Nome da testemunha 1");
