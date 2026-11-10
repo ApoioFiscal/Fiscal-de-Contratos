@@ -1,32 +1,116 @@
 import { apiRequest } from "./api";
-import type { Contrato } from "@/types/domain";
+import type {
+  Contrato,
+  ContratoCondicoes,
+  PapelParte,
+  PapelSignatario,
+  TipoDocumento,
+} from "@/types/domain";
 
 // Em produção o backend é outro projeto na Vercel; em desenvolvimento o Vite
 // faz proxy de `/api` para localhost:3333 (ver vite.config.ts).
 const API_BASE_URL = import.meta.env.VITE_API_URL ?? "/api";
 
-/** Resposta do `POST /api/contratos/importar` (após parsing + Zod + persistência). */
+/**
+ * Resposta do `POST /api/contratos/importar` (após parsing + Zod + persistência).
+ * Depois da importação o serviço recarrega o contrato completo para abrir a
+ * barra lateral de revisão já preenchida.
+ */
 export type ImportacaoContratoResult = {
   id: number;
   status: string;
   avisos: string[];
-};
+} & Partial<Contrato>;
 
+export interface ParteContratoPayload {
+  papel: PapelParte;
+  nome: string | null;
+  documento: string | null;
+  tipoDocumento: TipoDocumento | null;
+  endereco: string | null;
+  representanteNome: string | null;
+  representanteCargo: string | null;
+  representanteCpf: string | null;
+  representanteRg: string | null;
+  representanteOrgaoEmissorRg: string | null;
+  representanteNacionalidade: string | null;
+  representanteEstadoCivil: string | null;
+  representanteProfissao: string | null;
+  representanteEndereco: string | null;
+}
+
+export interface SignatarioContratoPayload {
+  id?: number;
+  papel: PapelSignatario;
+  ordem?: number;
+  nome: string | null;
+  cargo: string | null;
+  cpf: string | null;
+  cnpj: string | null;
+  rg: string | null;
+  orgaoEmissorRg: string | null;
+  nacionalidade: string | null;
+  estadoCivil: string | null;
+  profissao: string | null;
+  endereco: string | null;
+  confirmadoNoBloco: boolean;
+  legivel: boolean;
+}
+
+export interface ItemContratoPayload {
+  id?: number;
+  codigo: number | null;
+  descricao: string;
+  unidade: string;
+  unidadeOriginal: string | null;
+  quantidade: number;
+  valorUnitario: number;
+  valorTotal?: number;
+  correcoes: string[];
+}
+
+export interface DotacaoContratoPayload {
+  id?: number;
+  unidadeCodigo: string;
+  unidade: string;
+  funcionalProgramatica: string | null;
+  acao: string | null;
+  ficha: string | null;
+  elementoCodigo: string | null;
+  elementoDescricao: string | null;
+  naturezaCodigo: string | null;
+  natureza: string | null;
+  complemento: string | null;
+}
+
+/**
+ * Payload da revisão manual. Espelha o `GET /api/contratos/:id` (camelCase);
+ * `condicoes` continua snake_case porque é o JSON preservado da extração.
+ */
 export interface AtualizarContratoPayload {
   confirmar?: boolean;
-  status?: string;
-  numero_contrato?: string | null;
-  numero_processo?: string | null;
+  numero?: string;
+  numeroProcesso?: string | null;
   modalidade?: string | null;
-  numero_modalidade?: string | null;
+  numeroModalidade?: string | null;
   objeto?: string | null;
-  valor_total?: number | null;
-  vigencia?: {
-    data_inicio?: string | null;
-    data_fim?: string | null;
-    data_fim_calculada?: boolean;
-    trecho?: string | null;
-  } | null;
+  valorTotal?: number | null;
+  vigenciaInicio?: string | null;
+  vigenciaFim?: string | null;
+  vigenciaFimCalculada?: boolean;
+  vigenciaTrecho?: string | null;
+  foro?: string | null;
+  assinaturaLocal?: string | null;
+  assinaturaData?: string | null;
+  assinaturaDigital?: boolean;
+  assinaturaPlataforma?: string | null;
+  assinaturaAssinante?: string | null;
+  fundamentacaoLegal?: string[];
+  condicoes?: ContratoCondicoes | null;
+  partes?: ParteContratoPayload[];
+  signatarios?: SignatarioContratoPayload[];
+  itens?: ItemContratoPayload[];
+  dotacoes?: DotacaoContratoPayload[];
   setores?: Array<{ idSetor: number; origem?: "DOTACAO" | "MANUAL" }>;
 }
 

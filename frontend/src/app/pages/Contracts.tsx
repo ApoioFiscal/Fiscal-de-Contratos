@@ -19,15 +19,17 @@ import {
   Loader2,
   FileDown,
   CalendarDays,
+  PencilLine,
 } from "lucide-react";
 import type { Contrato, ContratoItem, StatusContrato } from "@/types/domain";
 import { STATUS_CONTRATO_LABEL } from "@/types/domain";
 import type { ImportacaoContratoResult } from "@/services/contratos";
+import { ContratoReviewDrawer } from "@/app/components/ContratoReviewDrawer";
 
 const fmt = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 
 const statusChip: Record<StatusContrato, string> = {
-  RASCUNDO: "bg-slate-100 text-slate-700",
+  RASCUNHO: "bg-slate-100 text-slate-700",
   ATIVA: "bg-emerald-100 text-emerald-800",
   EM_ADITAMENTO: "bg-amber-100 text-amber-800",
   ENCERRADA: "bg-slate-200 text-slate-600",
@@ -50,6 +52,7 @@ export function Contracts() {
 
   const [isImporting, setIsImporting] = useState(false);
   const [ultimoImport, setUltimoImport] = useState<ImportacaoContratoResult | null>(null);
+  const [contratoEmRevisao, setContratoEmRevisao] = useState<Contrato | null>(null);
 
   const [confirmandoId, setConfirmandoId] = useState<number | null>(null);
   const [swalError, setSwalError] = useState<string | null>(null);
@@ -84,6 +87,11 @@ export function Contracts() {
       const resultado = await importarContratoArquivo(arquivo);
       setUltimoImport(resultado);
       await reload();
+      // O OCR avisou que algo não foi lido: abre a revisão manual já preenchida.
+      // Só abre se o contrato completo voltou do backend (senão faltam coleções).
+      if ((resultado.avisos?.length ?? 0) > 0 && Array.isArray(resultado.partes)) {
+        setContratoEmRevisao(resultado as Contrato);
+      }
     } catch (err) {
       setSwalError(err instanceof Error ? err.message : "Erro ao importar o contrato.");
     } finally {
@@ -131,12 +139,18 @@ export function Contracts() {
     }
   };
 
+  // As datas do banco vêm como ISO em UTC (meia-noite). `slice(0, 10)` evita o
+  // deslocamento de um dia ao formatar no fuso local (UTC-3).
+  const dataLocal = (iso: string) => parseISO(iso.slice(0, 10));
+
   const vigenciaFim = (c: Contrato) =>
-    c.vigenciaFim ? format(parseISO(c.vigenciaFim), "dd/MM/yyyy") : "—";
+    c.vigenciaFim ? format(dataLocal(c.vigenciaFim), "dd/MM/yyyy") : "—";
 
   const diasRestantes = (c: Contrato) => {
     if (!c.vigenciaFim) return null;
-    const dias = differenceInDays(parseISO(c.vigenciaFim), new Date());
+    const hoje = new Date();
+    const hojeLocal = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate());
+    const dias = differenceInDays(dataLocal(c.vigenciaFim), hojeLocal);
     return dias;
   };
 
@@ -279,21 +293,30 @@ export function Contracts() {
               {expandedId === c.id && (
                 <div className="p-4 sm:px-6 bg-slate-50 border-t border-slate-100">
                   {/* Ações de revisão / download */}
-                  {(c.status === "RASCUNDO" && podeCriar) || c.arquivoPdf ? (
+                  {(c.status === "RASCUNHO" && podeCriar) || c.arquivoPdf ? (
                     <div className="mb-4 flex flex-wrap items-center gap-3">
-                      {c.status === "RASCUNDO" && podeCriar && (
-                        <button
-                          onClick={() => void handleConfirmarRevisao(c)}
-                          disabled={confirmandoId === c.id}
-                          className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 transition-colors"
-                        >
-                          {confirmandoId === c.id ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                          ) : (
-                            <CheckCircle2 className="w-4 h-4" />
-                          )}
-                          Confirmar Revisão (ATIVA)
-                        </button>
+                      {c.status === "RASCUNHO" && podeCriar && (
+                        <>
+                          <button
+                            onClick={() => setContratoEmRevisao(c)}
+                            className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium text-blue-700 bg-white border border-blue-300 hover:bg-blue-50 transition-colors"
+                          >
+                            <PencilLine className="w-4 h-4" />
+                            Revisar dados
+                          </button>
+                          <button
+                            onClick={() => void handleConfirmarRevisao(c)}
+                            disabled={confirmandoId === c.id}
+                            className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+                          >
+                            {confirmandoId === c.id ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <CheckCircle2 className="w-4 h-4" />
+                            )}
+                            Confirmar Revisão (ATIVA)
+                          </button>
+                        </>
                       )}
                       {c.arquivoPdf && (
                         <button
@@ -313,7 +336,7 @@ export function Contracts() {
                           Excluir
                         </button>
                       )}
-                      {c.status === "RASCUNDO" && !podeCriar && (
+                      {c.status === "RASCUNHO" && !podeCriar && (
                         <span className="text-xs text-slate-500">Apenas Licitações/Gabinete confirmam a revisão.</span>
                       )}
                     </div>
@@ -342,7 +365,7 @@ export function Contracts() {
                     <div className="mb-4 flex items-center gap-2 text-sm text-slate-700">
                       <CalendarDays className="w-4 h-4 text-slate-400" />
                       <span>
-                        Vigência: {format(parseISO(c.vigenciaInicio), "dd/MM/yyyy")} até {vigenciaFim(c)}
+                        Vigência: {format(dataLocal(c.vigenciaInicio), "dd/MM/yyyy")} até {vigenciaFim(c)}
                         {diasRestantes(c) != null && diasRestantes(c)! >= 0 && (
                           <span className="text-slate-500"> ({diasRestantes(c)} dias restantes)</span>
                         )}
@@ -414,6 +437,20 @@ export function Contracts() {
           )}
         </div>
       </div>
+
+      {contratoEmRevisao && (
+        <ContratoReviewDrawer
+          key={contratoEmRevisao.id}
+          contrato={contratoEmRevisao}
+          podeConfirmar={podeCriar}
+          onClose={() => setContratoEmRevisao(null)}
+          onSaved={() => {
+            setContratoEmRevisao(null);
+            setUltimoImport(null);
+            void reload();
+          }}
+        />
+      )}
     </div>
   );
 }

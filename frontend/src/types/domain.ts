@@ -164,8 +164,8 @@ export interface Contrato {
 }
 
 export interface ContratoCondicoes {
-  prazoExecucao: { quantidade: number; unidade: string; marco: string | null } | null;
-  prazoPagamento: { quantidade: number; unidade: string } | null;
+  prazo_execucao: { quantidade: number; unidade: string; marco: string | null } | null;
+  prazo_pagamento: { quantidade: number; unidade: string } | null;
   reajuste: { prazo: string | null; indice: string | null } | null;
 }
 
@@ -341,7 +341,7 @@ export const STATUS_PEDIDO_LABEL: Record<StatusPedido, string> = {
 };
 
 export const STATUS_CONTRATO_LABEL: Record<StatusContrato, string> = {
-  RASCUNDO: "Rascunho",
+  RASCUNHO: "Rascunho",
   ATIVA: "Ativa",
   EM_ADITAMENTO: "Em Aditamento",
   ENCERRADA: "Encerrada",

@@ -161,6 +161,29 @@ test.describe("Secretaria de Licitações (lic@marizopolis.gov.br)", () => {
     await expect(page.getByRole("heading", { name: "Termos de Renovação" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Solicitar Termo" })).toHaveCount(0);
   });
+
+  test("revisa os dados do contrato em rascunho na barra lateral", async ({ page }) => {
+    await logar(page, "lic@marizopolis.gov.br");
+    await page.goto("/contratos");
+
+    await page.getByText(NUMERO_CONTRATO).first().click();
+    await page.getByRole("button", { name: "Revisar dados" }).click();
+
+    const drawer = page.getByRole("dialog", { name: `Revisar contrato ${NUMERO_CONTRATO}` });
+    await expect(drawer).toBeVisible();
+    await expect(drawer.getByText("Dados gerais")).toBeVisible();
+
+    // O seed do E2E não cria signatários; a revisão manual serve justamente para
+    // preencher o que o OCR não trouxe. Se já houver testemunha, só corrige o nome.
+    const nomeTestemunha = drawer.getByLabel("Nome da testemunha 1");
+    if ((await nomeTestemunha.count()) === 0) {
+      await drawer.getByRole("button", { name: "Adicionar signatário" }).click();
+    }
+    await drawer.getByLabel("Nome da testemunha 1").fill("Maria Testemunha E2E");
+
+    await drawer.getByRole("button", { name: "Salvar revisão" }).click();
+    await expect(drawer).toHaveCount(0);
+  });
 });
 
 test.describe("Compras (compras@marizopolis.gov.br)", () => {

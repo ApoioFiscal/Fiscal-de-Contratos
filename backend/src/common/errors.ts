@@ -3,6 +3,7 @@ export enum ErrorCode {
   DUPLICATE_SIGLA = "DUPLICATE_SIGLA",
   DUPLICATE_EMAIL = "DUPLICATE_EMAIL",
   DUPLICATE_CONTRATO = "DUPLICATE_CONTRATO",
+  CONTRATO_NAO_EDITAVEL = "CONTRATO_NAO_EDITAVEL",
   SETOR_NOT_FOUND = "SETOR_NOT_FOUND",
   USUARIO_NOT_FOUND = "USUARIO_NOT_FOUND",
   INVALID_ID = "INVALID_ID",
@@ -64,6 +65,17 @@ export class DuplicateContratoError extends AppError {
       409
     );
     this.name = "DuplicateContratoError";
+  }
+}
+
+export class ContratoNaoEditavelError extends AppError {
+  constructor() {
+    super(
+      ErrorCode.CONTRATO_NAO_EDITAVEL,
+      "Só é possível revisar contratos em rascunho. Este contrato já foi confirmado.",
+      409
+    );
+    this.name = "ContratoNaoEditavelError";
   }
 }
 

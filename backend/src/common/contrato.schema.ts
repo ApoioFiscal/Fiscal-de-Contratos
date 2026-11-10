@@ -155,37 +155,129 @@ export const ContratoSetorInputSchema = z.object({
 
 export type ContratoSetorInput = z.infer<typeof ContratoSetorInputSchema>;
 
+// ---------- Revisão manual do contrato importado ----------
+//
+// O payload da revisão espelha o `GET /api/contratos/:id` (camelCase, nomes do
+// model Prisma), não o formato da extração. É a mesma forma que a barra lateral
+// de revisão já recebe na tela — evita conversão de snake_case no browser.
+// `condicoes` é a exceção: é um JSON preservado da extração, então continua
+// snake_case (prazo_execucao, prazo_pagamento, reajuste).
+
+const textoRevisao = z.string().nullable().optional();
+
+const dataRevisao = z
+  .string()
+  .regex(
+    /^\d{4}-\d{2}-\d{2}(?:[T ].*)?$/,
+    "Data inválida (use AAAA-MM-DD)",
+  )
+  .nullable()
+  .optional();
+
+export const ParteContratoRevisaoSchema = z.object({
+  papel: z.enum(PAPEIS_PARTE),
+  nome: textoRevisao,
+  documento: textoRevisao,
+  tipoDocumento: TipoDocumentoParteSchema.optional(),
+  endereco: textoRevisao,
+  representanteNome: textoRevisao,
+  representanteCargo: textoRevisao,
+  representanteCpf: textoRevisao,
+  representanteRg: textoRevisao,
+  representanteOrgaoEmissorRg: textoRevisao,
+  representanteNacionalidade: textoRevisao,
+  representanteEstadoCivil: textoRevisao,
+  representanteProfissao: textoRevisao,
+  representanteEndereco: textoRevisao,
+});
+
+export const SignatarioContratoRevisaoSchema = z.object({
+  /** Presente quando o signatário já existe; a revisão substitui a lista inteira. */
+  id: z.number().int().positive().optional(),
+  papel: z.enum(PAPEIS_SIGNATARIO),
+  ordem: z.number().int().nonnegative().optional(),
+  nome: textoRevisao,
+  cargo: textoRevisao,
+  cpf: textoRevisao,
+  cnpj: textoRevisao,
+  rg: textoRevisao,
+  orgaoEmissorRg: textoRevisao,
+  nacionalidade: textoRevisao,
+  estadoCivil: textoRevisao,
+  profissao: textoRevisao,
+  endereco: textoRevisao,
+  confirmadoNoBloco: z.boolean().optional(),
+  legivel: z.boolean().optional(),
+});
+
+export const ItemContratoRevisaoSchema = z.object({
+  /** Presente quando o item já existe; itens sem `id` são criados. */
+  id: z.number().int().positive().optional(),
+  codigo: z.number().int().nonnegative().nullable().optional(),
+  descricao: z.string().trim().min(1, "Descrição obrigatória"),
+  unidade: z.string().trim().min(1, "Unidade obrigatória"),
+  unidadeOriginal: z.string().nullable().optional(),
+  quantidade: z.number().nonnegative(),
+  valorUnitario: z.number().nonnegative(),
+  /** Quando omitido, o backend calcula `quantidade * valorUnitario`. */
+  valorTotal: z.number().nonnegative().optional(),
+  correcoes: z.array(z.string()).optional(),
+});
+
+export const DotacaoContratoRevisaoSchema = z.object({
+  id: z.number().int().positive().optional(),
+  unidadeCodigo: z.string().trim().min(1, "Informe o código da unidade"),
+  unidade: z.string().trim().min(1, "Informe a unidade"),
+  funcionalProgramatica: textoRevisao,
+  acao: textoRevisao,
+  ficha: textoRevisao,
+  elementoCodigo: textoRevisao,
+  elementoDescricao: textoRevisao,
+  naturezaCodigo: textoRevisao,
+  natureza: textoRevisao,
+  complemento: textoRevisao,
+});
+
 /**
- * Revisão do contrato importado. Tudo é opcional: a tela de revisão envia só o que o
- * usuário corrigiu. `confirmar: true` promove o contrato de RASCUNHO para ATIVA.
+ * Revisão do contrato importado. Tudo é opcional: a tela de revisão envia o que o
+ * usuário viu/corrigiu. `confirmar: true` promove o contrato de RASCUNHO para ATIVA.
+ *
+ * Regras aplicadas no repository:
+ * - só contratos `RASCUNHO` aceitam revisão (409 caso contrário);
+ * - `confirmar` exige `numero` preenchido;
+ * - `numero` duplicado responde 409 (`DUPLICATE_CONTRATO`);
+ * - `avisos` e `dadosExtraidos` são histórico e nunca são apagados pela revisão.
  */
 export const AtualizarContratoSchema = z.object({
-  numero_contrato: z.string().trim().min(1).nullable().optional(),
-  numero_processo: texto.optional(),
-  modalidade: texto.optional(),
-  numero_modalidade: texto.optional(),
-  objeto: z.string().trim().min(1).nullable().optional(),
-  contratante: ParteContratoSchema.optional(),
-  contratado: ParteContratoSchema.optional(),
-  signatarios: z.array(SignatarioContratoSchema).optional(),
-  assinatura: ContratoExtractionSchema.shape.assinatura.optional(),
-  vigencia: z
-    .object({
-      data_inicio: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Data inválida").nullable(),
-      data_fim: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Data inválida").nullable(),
-      data_fim_calculada: z.boolean().optional(),
-      trecho: texto.optional(),
-    })
-    .optional(),
-  valor_total: z.number().nonnegative().nullable().optional(),
-  itens: z.array(ItemContratoSchema).optional(),
-  dotacoes: z.array(DotacaoContratoSchema).optional(),
-  condicoes: CondicoesContratoSchema.optional(),
-  fundamentacao_legal: z.array(z.string()).optional(),
-  foro: texto.optional(),
+  numero: z.string().trim().min(1).optional(),
+  numeroProcesso: textoRevisao,
+  modalidade: textoRevisao,
+  numeroModalidade: textoRevisao,
+  objeto: textoRevisao,
+  valorTotal: z.number().nonnegative().nullable().optional(),
+  vigenciaInicio: dataRevisao,
+  vigenciaFim: dataRevisao,
+  vigenciaFimCalculada: z.boolean().optional(),
+  vigenciaTrecho: textoRevisao,
+  foro: textoRevisao,
+  assinaturaLocal: textoRevisao,
+  assinaturaData: dataRevisao,
+  assinaturaDigital: z.boolean().optional(),
+  assinaturaPlataforma: textoRevisao,
+  assinaturaAssinante: textoRevisao,
+  fundamentacaoLegal: z.array(z.string()).optional(),
+  condicoes: CondicoesContratoSchema.nullable().optional(),
+  partes: z.array(ParteContratoRevisaoSchema).optional(),
+  signatarios: z.array(SignatarioContratoRevisaoSchema).optional(),
+  itens: z.array(ItemContratoRevisaoSchema).optional(),
+  dotacoes: z.array(DotacaoContratoRevisaoSchema).optional(),
   setores: z.array(ContratoSetorInputSchema).optional(),
   /** Promove RASCUNHO → ATIVA depois da revisão. */
   confirmar: z.boolean().optional(),
 });
 
 export type AtualizarContratoInput = z.infer<typeof AtualizarContratoSchema>;
+export type ParteContratoRevisao = z.infer<typeof ParteContratoRevisaoSchema>;
+export type SignatarioContratoRevisao = z.infer<typeof SignatarioContratoRevisaoSchema>;
+export type ItemContratoRevisao = z.infer<typeof ItemContratoRevisaoSchema>;
+export type DotacaoContratoRevisao = z.infer<typeof DotacaoContratoRevisaoSchema>;

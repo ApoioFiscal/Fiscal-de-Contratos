@@ -2,8 +2,19 @@ import { prisma } from "../../prisma/client";
 import { StatusContrato } from "@prisma/client";
 import { Prisma } from "@prisma/client";
 import { ContratoCreateData } from "./conversorContrato";
-import { AtualizarContratoInput } from "../../common/contrato.schema";
-import { NotFoundError, DuplicateContratoError } from "../../common/errors";
+import {
+  AtualizarContratoInput,
+  ParteContratoRevisao,
+  SignatarioContratoRevisao,
+  ItemContratoRevisao,
+  DotacaoContratoRevisao,
+} from "../../common/contrato.schema";
+import {
+  NotFoundError,
+  DuplicateContratoError,
+  ContratoNaoEditavelError,
+  ValidationError,
+} from "../../common/errors";
 
 const contratoInclude = {
   partes: true,
@@ -12,6 +23,66 @@ const contratoInclude = {
   dotacoes: { orderBy: { id: "asc" as const } },
   setores: { include: { setor: true }, orderBy: { id: "asc" as const } },
 };
+
+const arredondar = (valor: number) => Math.round(valor * 100) / 100;
+
+const dadosParte = (parte: ParteContratoRevisao) => ({
+  nome: parte.nome ?? null,
+  documento: parte.documento ?? null,
+  tipoDocumento: parte.tipoDocumento ?? null,
+  endereco: parte.endereco ?? null,
+  representanteNome: parte.representanteNome ?? null,
+  representanteCargo: parte.representanteCargo ?? null,
+  representanteCpf: parte.representanteCpf ?? null,
+  representanteRg: parte.representanteRg ?? null,
+  representanteOrgaoEmissorRg: parte.representanteOrgaoEmissorRg ?? null,
+  representanteNacionalidade: parte.representanteNacionalidade ?? null,
+  representanteEstadoCivil: parte.representanteEstadoCivil ?? null,
+  representanteProfissao: parte.representanteProfissao ?? null,
+  representanteEndereco: parte.representanteEndereco ?? null,
+});
+
+const dadosSignatario = (signatario: SignatarioContratoRevisao, ordem: number) => ({
+  papel: signatario.papel,
+  ordem: signatario.ordem ?? ordem,
+  nome: signatario.nome ?? null,
+  cargo: signatario.cargo ?? null,
+  cpf: signatario.cpf ?? null,
+  cnpj: signatario.cnpj ?? null,
+  rg: signatario.rg ?? null,
+  orgaoEmissorRg: signatario.orgaoEmissorRg ?? null,
+  nacionalidade: signatario.nacionalidade ?? null,
+  estadoCivil: signatario.estadoCivil ?? null,
+  profissao: signatario.profissao ?? null,
+  endereco: signatario.endereco ?? null,
+  confirmadoNoBloco: signatario.confirmadoNoBloco ?? false,
+  legivel: signatario.legivel ?? true,
+});
+
+const dadosItem = (item: ItemContratoRevisao) => ({
+  codigo: item.codigo ?? null,
+  descricao: item.descricao,
+  unidade: item.unidade,
+  unidadeOriginal: item.unidadeOriginal ?? null,
+  quantidade: item.quantidade,
+  valorUnitario: item.valorUnitario,
+  valorTotal: item.valorTotal ?? arredondar(item.quantidade * item.valorUnitario),
+  correcoes: item.correcoes ?? [],
+});
+
+const dadosDotacao = (dotacao: DotacaoContratoRevisao) => ({
+  unidadeCodigo: dotacao.unidadeCodigo,
+  unidade: dotacao.unidade,
+  funcionalProgramatica: dotacao.funcionalProgramatica ?? null,
+  acao: dotacao.acao ?? null,
+  ficha: dotacao.ficha ?? null,
+  elementoCodigo: dotacao.elementoCodigo ?? null,
+  elementoDescricao: dotacao.elementoDescricao ?? null,
+  naturezaCodigo: dotacao.naturezaCodigo ?? null,
+  natureza: dotacao.natureza ?? null,
+  complemento: dotacao.complemento ?? null,
+});
+
 
 export class ContratoRepository {
   async findAll() {
@@ -120,41 +191,81 @@ export class ContratoRepository {
   async atualizar(id: number, input: AtualizarContratoInput) {
     const atual = await prisma.contrato.findUnique({
       where: { id },
-      select: { status: true },
+      select: { id: true, status: true, numero: true, valorTotal: true },
     });
 
     if (!atual) {
       throw new NotFoundError("Contrato");
     }
 
+    // A revisão manual existe para corrigir o que o OCR não leu. Depois de
+    // confirmado, o contrato é a fonte oficial e não pode mais ser reescrito.
+    if (atual.status !== StatusContrato.RASCUNHO) {
+      throw new ContratoNaoEditavelError();
+    }
+
+    const numeroFinal = (input.numero ?? atual.numero ?? "").trim();
+
+    if (input.confirmar && !numeroFinal) {
+      throw new ValidationError("Informe o número do contrato antes de confirmar a revisão.");
+    }
+
+    if (input.numero !== undefined && input.numero !== atual.numero) {
+      const existente = await prisma.contrato.findUnique({
+        where: { numero: input.numero },
+        select: { id: true },
+      });
+      if (existente && existente.id !== id) throw new DuplicateContratoError(input.numero);
+    }
+
     const data: Prisma.ContratoUncheckedUpdateInput = {};
 
-    if (input.numero_contrato !== undefined) data.numero = input.numero_contrato ?? undefined;
-    if (input.numero_processo !== undefined) data.numeroProcesso = input.numero_processo;
+    if (input.numero !== undefined) data.numero = input.numero;
+    if (input.numeroProcesso !== undefined) data.numeroProcesso = input.numeroProcesso;
     if (input.modalidade !== undefined) data.modalidade = input.modalidade;
-    if (input.numero_modalidade !== undefined) data.numeroModalidade = input.numero_modalidade;
+    if (input.numeroModalidade !== undefined) data.numeroModalidade = input.numeroModalidade;
     if (input.objeto !== undefined) data.objeto = input.objeto;
-    if (input.valor_total !== undefined) data.valorTotal = input.valor_total;
-    if (input.vigencia?.data_inicio !== undefined) {
-      data.vigenciaInicio = input.vigencia.data_inicio ? new Date(input.vigencia.data_inicio) : null;
+    if (input.valorTotal !== undefined) data.valorTotal = input.valorTotal;
+    if (input.vigenciaInicio !== undefined) {
+      data.vigenciaInicio = input.vigenciaInicio ? new Date(input.vigenciaInicio) : null;
     }
-    if (input.vigencia?.data_fim !== undefined) {
-      data.vigenciaFim = input.vigencia.data_fim ? new Date(input.vigencia.data_fim) : null;
+    if (input.vigenciaFim !== undefined) {
+      data.vigenciaFim = input.vigenciaFim ? new Date(input.vigenciaFim) : null;
     }
-    if (input.vigencia?.data_fim_calculada !== undefined) {
-      data.vigenciaFimCalculada = input.vigencia.data_fim_calculada;
+    if (input.vigenciaFimCalculada !== undefined) {
+      data.vigenciaFimCalculada = input.vigenciaFimCalculada;
     }
-    if (input.vigencia?.trecho !== undefined) data.vigenciaTrecho = input.vigencia.trecho;
+    if (input.vigenciaTrecho !== undefined) data.vigenciaTrecho = input.vigenciaTrecho;
     if (input.foro !== undefined) data.foro = input.foro;
-    if (input.valor_total !== undefined) data.valorTotal = input.valor_total;
-    if (input.fundamentacao_legal !== undefined) data.fundamentacaoLegal = input.fundamentacao_legal;
-    if (input.condicoes !== undefined) data.condicoes = input.condicoes as Prisma.InputJsonValue;
-    if (input.assinatura !== undefined) {
-      data.assinaturaLocal = input.assinatura.local;
-      data.assinaturaData = input.assinatura.data ? new Date(input.assinatura.data) : null;
-      data.assinaturaDigital = input.assinatura.assinatura_digital?.detectada ?? false;
-      data.assinaturaPlataforma = input.assinatura.assinatura_digital?.plataforma ?? null;
-      data.assinaturaAssinante = input.assinatura.assinatura_digital?.assinante ?? null;
+    if (input.fundamentacaoLegal !== undefined) data.fundamentacaoLegal = input.fundamentacaoLegal;
+    if (input.condicoes !== undefined) {
+      data.condicoes =
+        input.condicoes === null
+          ? Prisma.DbNull
+          : (input.condicoes as Prisma.InputJsonValue);
+    }
+    if (input.assinaturaLocal !== undefined) data.assinaturaLocal = input.assinaturaLocal;
+    if (input.assinaturaData !== undefined) {
+      data.assinaturaData = input.assinaturaData ? new Date(input.assinaturaData) : null;
+    }
+    if (input.assinaturaDigital !== undefined) data.assinaturaDigital = input.assinaturaDigital;
+    if (input.assinaturaPlataforma !== undefined) {
+      data.assinaturaPlataforma = input.assinaturaPlataforma;
+    }
+    if (input.assinaturaAssinante !== undefined) {
+      data.assinaturaAssinante = input.assinaturaAssinante;
+    }
+
+    // Recalcula a conferência dos itens com o valor do contrato revisado.
+    // `itensConferemTotalTabela` continua sendo o registro histórico do PDF.
+    if (input.itens !== undefined) {
+      const somaItens = input.itens.reduce(
+        (acc, item) => acc + (item.valorTotal ?? arredondar(item.quantidade * item.valorUnitario)),
+        0,
+      );
+      const valorContrato = input.valorTotal !== undefined ? input.valorTotal : atual.valorTotal;
+      data.itensConferemValorContrato =
+        valorContrato == null ? null : Math.abs(somaItens - valorContrato) <= 0.01;
     }
 
     // `confirmar: true` na revisão promove RASCUNHO → ATIVA.
@@ -162,31 +273,140 @@ export class ContratoRepository {
       data.status = StatusContrato.ATIVA;
     }
 
-    const contrato = await prisma.contrato.update({
-      where: { id },
-      data,
-      include: {
-        ...contratoInclude,
-        setores: { include: { setor: true }, orderBy: { id: "asc" } },
-      },
-    });
+    try {
+      return await prisma.$transaction(async (tx) => {
+        await tx.contrato.update({ where: { id }, data });
 
-    // Vínculos contrato ↔ secretaria (origem DOTACAO/MANUAL) enviados na revisão.
-    if (input.setores !== undefined) {
-      await prisma.contratoSetor.deleteMany({ where: { idContrato: id } });
+        // Partes: uma linha por papel (contratante/contratado).
+        if (input.partes !== undefined) {
+          for (const parte of input.partes) {
+            await tx.contratoParte.upsert({
+              where: { idContrato_papel: { idContrato: id, papel: parte.papel } },
+              create: { idContrato: id, papel: parte.papel, ...dadosParte(parte) },
+              update: dadosParte(parte),
+            });
+          }
+        }
 
-      const vinculados = input.setores.filter((s) => s.idSetor > 0);
-      if (vinculados.length > 0) {
-        await prisma.contratoSetor.createMany({
-          data: vinculados.map((s) => ({
-            idContrato: id,
-            idSetor: s.idSetor,
-            origem: s.origem,
-          })),
+        // Signatários: a revisão envia a lista completa, então substitui.
+        if (input.signatarios !== undefined) {
+          await tx.contratoSignatario.deleteMany({ where: { idContrato: id } });
+          if (input.signatarios.length > 0) {
+            await tx.contratoSignatario.createMany({
+              data: input.signatarios.map((signatario, ordem) => ({
+                idContrato: id,
+                ...dadosSignatario(signatario, ordem),
+              })),
+            });
+          }
+        }
+
+        // Dotações: mesma lógica dos signatários (lista completa).
+        if (input.dotacoes !== undefined) {
+          await tx.contratoDotacao.deleteMany({ where: { idContrato: id } });
+          if (input.dotacoes.length > 0) {
+            await tx.contratoDotacao.createMany({
+              data: input.dotacoes.map((dotacao) => ({
+                idContrato: id,
+                ...dadosDotacao(dotacao),
+              })),
+            });
+          }
+        }
+
+        // Itens: atualiza os existentes, cria os novos e remove os retirados.
+        if (input.itens !== undefined) {
+          const itensAtuais = await tx.contratoItem.findMany({
+            where: { idContrato: id },
+            select: { id: true },
+          });
+          const idsAtuais = new Set(itensAtuais.map((item) => item.id));
+          const enviados = new Set(
+            input.itens
+              .map((item) => item.id)
+              .filter((itemId): itemId is number => typeof itemId === "number"),
+          );
+
+          const idsInvalidos = [...enviados].filter((itemId) => !idsAtuais.has(itemId));
+          if (idsInvalidos.length > 0) {
+            throw new ValidationError("A revisão contém itens que não pertencem a este contrato.");
+          }
+
+          const removidos = itensAtuais
+            .map((item) => item.id)
+            .filter((itemId) => !enviados.has(itemId));
+
+          if (removidos.length > 0) {
+            // Item com pedido/NF/movimentação não pode sumir: quebraria o histórico.
+            const [pedidos, notas, movimentacoes] = await Promise.all([
+              tx.pedidoItem.count({ where: { idContratoItem: { in: removidos } } }),
+              tx.notaFiscalItem.count({ where: { idContratoItem: { in: removidos } } }),
+              tx.movimentacaoEstoque.count({ where: { idContratoItem: { in: removidos } } }),
+            ]);
+
+            if (pedidos + notas + movimentacoes > 0) {
+              throw new ValidationError(
+                "Não é possível remover itens que já possuem pedidos, notas fiscais ou movimentações de estoque.",
+              );
+            }
+
+            await tx.contratoItem.deleteMany({ where: { id: { in: removidos } } });
+          }
+
+          for (const item of input.itens) {
+            if (item.id !== undefined) {
+              await tx.contratoItem.update({
+                where: { id: item.id },
+                data: dadosItem(item),
+              });
+            } else {
+              await tx.contratoItem.create({
+                data: { idContrato: id, ...dadosItem(item) },
+              });
+            }
+          }
+        }
+
+        // Vínculos contrato ↔ secretaria (origem DOTACAO/MANUAL) enviados na revisão.
+        if (input.setores !== undefined) {
+          await tx.contratoSetor.deleteMany({ where: { idContrato: id } });
+
+          const vinculados = new Map<number, "DOTACAO" | "MANUAL">();
+          for (const setor of input.setores) {
+            if (setor.idSetor > 0) vinculados.set(setor.idSetor, setor.origem);
+          }
+
+          if (vinculados.size > 0) {
+            await tx.contratoSetor.createMany({
+              data: [...vinculados.entries()].map(([idSetor, origem]) => ({
+                idContrato: id,
+                idSetor,
+                origem,
+              })),
+            });
+          }
+        }
+
+        return tx.contrato.findUnique({
+          where: { id },
+          include: {
+            ...contratoInclude,
+            setores: { include: { setor: true }, orderBy: { id: "asc" } },
+          },
         });
+      });
+    } catch (error) {
+      // Corrida entre revisões/importações do mesmo número: devolve o mesmo 409
+      // amigável em vez do 500 genérico.
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+        const alvo = Array.isArray(error.meta?.target)
+          ? error.meta.target.join(",")
+          : String(error.meta?.target ?? "");
+        if (!alvo || alvo.includes("numero")) {
+          throw new DuplicateContratoError(numeroFinal);
+        }
       }
+      throw error;
     }
-
-    return contrato;
   }
 }

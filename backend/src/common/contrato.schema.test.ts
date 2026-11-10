@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
-import { ContratoExtractionSchema } from "./contrato.schema";
+import { ContratoExtractionSchema, AtualizarContratoSchema } from "./contrato.schema";
 import { mapearParaCriar } from "../modules/contrato/conversorContrato";
 
 /**
@@ -132,3 +132,80 @@ test("schema rejeita contrato sem as partes (não inventa dados)", () => {
 
   assert.throws(() => ContratoExtractionSchema.parse(semPartes));
 });
+
+test("revisão aceita o payload camelCase devolvido pelo GET, com coleções", () => {
+  const payload = {
+    numero: "00141/2026-SDC",
+    numeroProcesso: "260803DV00014",
+    objeto: "Objeto corrigido à mão",
+    valorTotal: 37135,
+    vigenciaInicio: "2026-08-19",
+    vigenciaFim: "2026-12-31",
+    assinaturaData: "2026-08-19T00:00:00.000Z",
+    assinaturaDigital: false,
+    fundamentacaoLegal: ["Lei Federal nº 14.133/2021"],
+    condicoes: {
+      prazo_execucao: { quantidade: 15, unidade: "dias úteis", marco: "Ordem de Fornecimento" },
+      prazo_pagamento: { quantidade: 30, unidade: "dias corridos" },
+      reajuste: { prazo: "um ano", indice: "IPCA" },
+    },
+    partes: [
+      {
+        papel: "CONTRATANTE",
+        nome: "Prefeitura Municipal de Marizópolis",
+        documento: "01.612.941/0001-49",
+        tipoDocumento: "CNPJ",
+        representanteNome: "Prefeito",
+      },
+    ],
+    signatarios: [
+      {
+        papel: "TESTEMUNHA",
+        ordem: 2,
+        nome: "Maria Testemunha",
+        confirmadoNoBloco: false,
+        legivel: true,
+      },
+    ],
+    itens: [
+      {
+        id: 1,
+        descricao: "PLACA EM ACM",
+        unidade: "m²",
+        quantidade: 50,
+        valorUnitario: 289,
+      },
+    ],
+    dotacoes: [
+      {
+        unidadeCodigo: "02",
+        unidade: "SECRETARIA DE EDUCAÇÃO",
+        funcionalProgramatica: "12.361.0002.2001",
+      },
+    ],
+    confirmar: false,
+  };
+
+  const parsed = AtualizarContratoSchema.parse(payload);
+
+  assert.equal(parsed.numero, "00141/2026-SDC");
+  assert.equal(parsed.itens?.length, 1);
+  assert.equal(parsed.itens?.[0].id, 1);
+  assert.equal(parsed.partes?.[0].tipoDocumento, "CNPJ");
+  assert.equal(parsed.signatarios?.[0].confirmadoNoBloco, false);
+  assert.equal(parsed.condicoes?.prazo_execucao?.quantidade, 15);
+
+  // `condicoes` pode ser limpo na revisão.
+  assert.doesNotThrow(() => AtualizarContratoSchema.parse({ condicoes: null }));
+});
+
+test("revisão rejeita item sem descrição e data fora do formato", () => {
+  assert.throws(() =>
+    AtualizarContratoSchema.parse({
+      itens: [{ descricao: "  ", unidade: "m²", quantidade: 1, valorUnitario: 10 }],
+    }),
+  );
+
+  assert.throws(() => AtualizarContratoSchema.parse({ vigenciaInicio: "31/12/2026" }));
+});
+
