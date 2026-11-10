@@ -4,7 +4,7 @@ import { UsuarioService } from "./usuario.service";
 import { UsuarioRepository } from "./usuario.repository";
 import { SetorRepository } from "../setor/setor.repository";
 import { asyncHandler, autenticationMiddleware, requerAdmin, validateBody, validateParams } from "../../common/middleware";
-import { CreateUsuarioSchema, IdParamSchema, UsuarioLoginSchema } from "../../common/schemas";
+import { CreateUsuarioSchema, IdParamSchema, UpdateUsuarioSchema, UsuarioLoginSchema } from "../../common/schemas";
 
 // Injeção de dependência
 const usuarioRepository = new UsuarioRepository();
@@ -43,6 +43,16 @@ usuarioRouter.get(
   autenticationMiddleware,
   validateParams(IdParamSchema),
   asyncHandler((req, res) => controller.findById(req, res))
+);
+
+// Rota para atualizar um usuário (apenas administrativo)
+usuarioRouter.patch(
+  "/:id",
+  autenticationMiddleware,
+  requerAdmin,
+  validateParams(IdParamSchema),
+  validateBody(UpdateUsuarioSchema),
+  asyncHandler((req, res) => controller.update(req, res))
 );
 
 // Rota para deletar um usuário (apenas administrativo)

@@ -1,11 +1,15 @@
 import bcrypt from "bcrypt";
 import { UsuarioRepository } from "./usuario.repository";
 import { SetorRepository } from "../setor/setor.repository";
-import { CreateUsuarioInput, LoginUserInput } from "../../common/schemas";
+import { CreateUsuarioInput, LoginUserInput, UpdateUsuarioInput } from "../../common/schemas";
 import { DuplicateEmailError, NotFoundError, ValidationError } from "../../common/errors";
 import jwt from "jsonwebtoken"
 
 const SALT_ROUNDS = 12;
+
+function normalizarEmail(email: string): string {
+  return email.trim().toLowerCase();
+}
 
 export class UsuarioService {
   constructor(
@@ -15,8 +19,10 @@ export class UsuarioService {
 
   // Criação de um novo usuário
   async create(input: CreateUsuarioInput) {
+    const email = normalizarEmail(input.email);
+
     // Valida email único
-    const emailJaExiste = await this.usuarioRepository.findByEmail(input.email);
+    const emailJaExiste = await this.usuarioRepository.findByEmail(email);
     if (emailJaExiste) {
       throw new DuplicateEmailError();
     }
@@ -32,8 +38,46 @@ export class UsuarioService {
 
     return this.usuarioRepository.create({
       ...input,
+      email,
       senha: senhaHash,
     });
+  }
+
+  // Atualiza os dados de um usuário (ex.: responsável vinculado a um setor).
+  // A senha só é redefinida quando enviada; caso contrário, a atual é mantida.
+  async update(id: number, input: UpdateUsuarioInput) {
+    const usuario = await this.usuarioRepository.findById(id);
+    if (!usuario) {
+      throw new NotFoundError("Usuário");
+    }
+
+    const { senha, email, ...resto } = input;
+
+    const data: UpdateUsuarioInput & { senha?: string } = { ...resto };
+
+    if (email !== undefined) {
+      const emailNormalizado = normalizarEmail(email);
+      if (emailNormalizado !== usuario.email) {
+        const emailJaExiste = await this.usuarioRepository.findByEmail(emailNormalizado);
+        if (emailJaExiste) {
+          throw new DuplicateEmailError();
+        }
+      }
+      data.email = emailNormalizado;
+    }
+
+    if (input.idSetor !== undefined) {
+      const setorExiste = await this.setorRepository.findById(input.idSetor);
+      if (!setorExiste) {
+        throw new NotFoundError("Setor");
+      }
+    }
+
+    if (senha !== undefined && senha.length > 0) {
+      data.senha = await bcrypt.hash(senha, SALT_ROUNDS);
+    }
+
+    return this.usuarioRepository.update(id, data);
   }
 
   // Busca todos os usuários.
@@ -67,7 +111,7 @@ export class UsuarioService {
   // Rota de login para o usuário
   async loginUser(input: LoginUserInput): Promise<string> {
     // Verifica se o usuário existe
-    const usuario = await this.usuarioRepository.findByEmail(input.email);
+    const usuario = await this.usuarioRepository.findByEmail(normalizarEmail(input.email));
     if (!usuario) {
       throw new ValidationError("Usuário não encontrado");
     }

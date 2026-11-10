@@ -2,9 +2,45 @@ import { FuncaoUsuario, StatusContrato, TipoSetor } from '@prisma/client';
 import bcrypt from 'bcrypt';
 import { prisma } from '../src/prisma/client';
 
+// Usuários exemplares são resolvidos pelo vínculo (setor + função + isAdmin),
+// não pelo e-mail: depois que o gabinete trocar nome/e-mail/senha de um
+// responsável pela tela de Setores e Secretarias, rodar o seed de novo não
+// recria a conta antiga de exemplo.
+async function garantirUsuario(params: {
+  nome: string;
+  email: string;
+  senha: string;
+  funcao: FuncaoUsuario;
+  isAdmin?: boolean;
+  idSetor: number;
+}) {
+  const isAdmin = params.isAdmin ?? false;
+
+  const existente = await prisma.usuario.findFirst({
+    where: { idSetor: params.idSetor, funcao: params.funcao, isAdmin },
+    orderBy: { id: 'asc' },
+  });
+
+  if (existente) {
+    return existente;
+  }
+
+  return prisma.usuario.create({
+    data: {
+      nome: params.nome,
+      email: params.email,
+      senha: params.senha,
+      funcao: params.funcao,
+      isAdmin,
+      idSetor: params.idSetor,
+    },
+  });
+}
+
 async function main() {
   console.log('Iniciando o seed do banco de dados...');
 
+  // Setores raízes do sistema (não podem ser excluídos pela tela).
   const setorGabinete = await prisma.setor.upsert({
     where: { sigla: 'GAB' },
     update: { tipo: TipoSetor.GABINETE },
@@ -31,95 +67,40 @@ async function main() {
 
   const senhaHash = await bcrypt.hash('123456', 12);
 
-  const superAdmin = await prisma.usuario.upsert({
-    where: { email: 'admin@marizopolis.gov.br' },
-    update: { funcao: FuncaoUsuario.PREFEITO, isAdmin: true, idSetor: setorGabinete.id },
-    create: {
-      nome: 'Prefeito',
-      email: 'admin@marizopolis.gov.br',
-      senha: senhaHash,
-      funcao: FuncaoUsuario.PREFEITO,
-      isAdmin: true,
-      idSetor: setorGabinete.id,
-    },
+  // Admin = Gabinete do Prefeito. As secretarias beneficiárias são cadastradas
+  // pelo próprio gabinete na tela de Setores e Secretarias (nada fixo no seed).
+  const superAdmin = await garantirUsuario({
+    nome: 'Prefeito',
+    email: 'admin@marizopolis.gov.br',
+    senha: senhaHash,
+    funcao: FuncaoUsuario.PREFEITO,
+    isAdmin: true,
+    idSetor: setorGabinete.id,
   });
 
-  // Secretaria de exemplo: beneficiária dos contratos e origem dos pedidos de teste
-  const setorSaude = await prisma.setor.upsert({
-    where: { sigla: 'SAUDE' },
-    update: { tipo: TipoSetor.SECRETARIA },
-    create: {
-      nome: 'Secretaria Municipal de Saúde',
-      sigla: 'SAUDE',
-      tipo: TipoSetor.SECRETARIA,
-    },
+  const usuarioLic = await garantirUsuario({
+    nome: 'Licitações',
+    email: 'lic@marizopolis.gov.br',
+    senha: senhaHash,
+    funcao: FuncaoUsuario.SECRETARIO,
+    idSetor: setorLicitacoes.id,
   });
 
-  // Usuário de teste da Secretaria de Licitações
-  const usuarioLic = await prisma.usuario.upsert({
-    where: { email: 'lic@marizopolis.gov.br' },
-    update: { funcao: FuncaoUsuario.SECRETARIO, idSetor: setorLicitacoes.id },
-    create: {
-      nome: 'Licitações',
-      email: 'lic@marizopolis.gov.br',
-      senha: senhaHash,
-      funcao: FuncaoUsuario.SECRETARIO,
-      isAdmin: false,
-      idSetor: setorLicitacoes.id,
-    },
+  const usuarioFcon = await garantirUsuario({
+    nome: 'Fiscalização de Contratos',
+    email: 'fcon@marizopolis.gov.br',
+    senha: senhaHash,
+    funcao: FuncaoUsuario.FISCAL,
+    idSetor: setorFiscalizacao.id,
   });
 
-  // Usuário de teste da Secretaria de Saúde (beneficiária dos contratos de exemplo)
-  const usuarioSaude = await prisma.usuario.upsert({
-    where: { email: 'saude@marizopolis.gov.br' },
-    update: { funcao: FuncaoUsuario.SECRETARIO, idSetor: setorSaude.id },
-    create: {
-      nome: 'Secretaria de Saúde',
-      email: 'saude@marizopolis.gov.br',
-      senha: senhaHash,
-      funcao: FuncaoUsuario.SECRETARIO,
-      isAdmin: false,
-      idSetor: setorSaude.id,
-    },
+  const usuarioCompras = await garantirUsuario({
+    nome: 'Compras',
+    email: 'compras@marizopolis.gov.br',
+    senha: senhaHash,
+    funcao: FuncaoUsuario.SECRETARIO,
+    idSetor: setorCompras.id,
   });
-
-  // Usuário de teste da Fiscalização de Contratos
-  const usuarioFcon = await prisma.usuario.upsert({
-    where: { email: 'fcon@marizopolis.gov.br' },
-    update: { funcao: FuncaoUsuario.FISCAL, idSetor: setorFiscalizacao.id },
-    create: {
-      nome: 'Fiscalização de Contratos',
-      email: 'fcon@marizopolis.gov.br',
-      senha: senhaHash,
-      funcao: FuncaoUsuario.FISCAL,
-      isAdmin: false,
-      idSetor: setorFiscalizacao.id,
-    },
-  });
-
-  const usuarioCompras = await prisma.usuario.upsert({
-    where: { email: 'compras@marizopolis.gov.br' },
-    update: { funcao: FuncaoUsuario.SECRETARIO, idSetor: setorCompras.id },
-    create: {
-      nome: 'Compras',
-      email: 'compras@marizopolis.gov.br',
-      senha: senhaHash,
-      funcao: FuncaoUsuario.SECRETARIO,
-      isAdmin: false,
-      idSetor: setorCompras.id,
-    },
-  });
-
-  // Beneficiárias dos contratos de exemplo: FCON + todas as secretarias que o
-  // gabinete cadastrou (nada é fixo no seed — quem cadastra secretaria é
-  // o gabinete, e ela automaticamente passa a ser beneficiária dos exemplos).
-  const secretariasCadastradas = await prisma.setor.findMany({
-    where: { sigla: { notIn: ['GAB', 'LIC', 'FCON', 'CMP'] } },
-    select: { id: true },
-  });
-  const vincularSetores = [setorFiscalizacao.id, ...secretariasCadastradas.map((s) => s.id)].map(
-    (idSetor) => ({ idSetor }),
-  );
 
   // Contrato real: extraído do PDF assinado (processo 260803DV00014, contrato
   // 00141/2026-SDC) pelo serviço de parsing. Nasce como RASCUNHO — "importado,
@@ -191,26 +172,28 @@ async function main() {
         ],
       },
       setores: {
-        create: vincularSetores,
+        create: [{ idSetor: setorFiscalizacao.id }],
       },
     },
   });
 
-  // Garante as beneficiárias do contrato de exemplo (FCON + secretarias que o
-  // gabinete cadastrou). Feito após o upsert para funcionar também em banco já
-  // existente (o upsert tem update vazio e não alteraria). delete → create em
-  // passos separados evita conflito de unicidade e ao menos uma vez é idempotente.
-  for (const exemplo of [contratoExemplo]) {
-    await prisma.contratoSetor.deleteMany({ where: { idContrato: exemplo.id } });
-    await prisma.contratoSetor.createMany({
-      data: vincularSetores.map((v) => ({ ...v, idContrato: exemplo.id })),
-    });
-  }
+  // Garante o FCON como beneficiário do contrato de exemplo também em bancos
+  // já existentes (o upsert acima tem update vazio e não alteraria). Usa upsert
+  // para não remover vínculos reais de secretarias criados pela importação.
+  await prisma.contratoSetor.upsert({
+    where: {
+      idContrato_idSetor: {
+        idContrato: contratoExemplo.id,
+        idSetor: setorFiscalizacao.id,
+      },
+    },
+    update: {},
+    create: { idContrato: contratoExemplo.id, idSetor: setorFiscalizacao.id },
+  });
 
   console.log('Seed finalizado! Super Usuário garantido:', superAdmin.email);
   console.log('Usuário de compras garantido:', usuarioCompras.email);
   console.log('Usuário de licitações garantido:', usuarioLic.email);
-  console.log('Usuário de saúde garantido:', usuarioSaude.email);
   console.log('Usuário de fiscalização garantido:', usuarioFcon.email);
   console.log('Contrato de exemplo garantido:', contratoExemplo.numero);
 }

@@ -24,6 +24,13 @@ export class UsuarioController {
     sendSuccess(res, usuario);
   }
 
+  // Atualizar um usuário existente
+  async update(req: Request, res: Response): Promise<void> {
+    const id = Number(req.params.id);
+    const usuario = await this.service.update(id, req.body);
+    sendSuccess(res, usuario);
+  }
+
   // Deletar usuário por ID
   async deleteById(req: Request, res: Response): Promise<void> {
     const id = Number(req.params.id);

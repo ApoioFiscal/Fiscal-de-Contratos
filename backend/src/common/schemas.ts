@@ -27,22 +27,37 @@ export type CreateSetorInput = z.infer<typeof CreateSetorSchema>;
 
 export type UpdateSetorInput = z.infer<typeof UpdateSetorSchema>
 
+const FUNCAO_USUARIO_VALUES = [
+  FuncaoUsuario.PREFEITO,
+  FuncaoUsuario.SECRETARIO,
+  FuncaoUsuario.SERVIDOR,
+  FuncaoUsuario.FISCAL,
+] as [FuncaoUsuario, ...FuncaoUsuario[]];
+
 // Schemas de criação de um novo Usuario
 export const CreateUsuarioSchema = z.object({
   nome: z.string().min(1, "Nome e obrigatorio").trim(),
   email: z.string().email("E-mail invalido"),
   senha: z.string().min(6, "Senha deve ter no minimo 6 caracteres"),
-  funcao: z.enum([
-    FuncaoUsuario.PREFEITO,
-    FuncaoUsuario.SECRETARIO,
-    FuncaoUsuario.SERVIDOR,
-    FuncaoUsuario.FISCAL,
-  ]),
+  funcao: z.enum(FUNCAO_USUARIO_VALUES),
   isAdmin: z.boolean().optional().default(false),
   idSetor: z.number().int().positive("ID do setor deve ser um numero positivo"),
 });
 
 export type CreateUsuarioInput = z.infer<typeof CreateUsuarioSchema>;
+
+// Atualização de um usuário (ex.: dados do secretário responsável por um setor).
+// Todos os campos são opcionais; a senha só é redefinida quando enviada.
+export const UpdateUsuarioSchema = z.object({
+  nome: z.string().min(1, "Nome e obrigatorio").trim().optional(),
+  email: z.string().email("E-mail invalido").optional(),
+  senha: z.string().min(6, "Senha deve ter no minimo 6 caracteres").optional(),
+  funcao: z.enum(FUNCAO_USUARIO_VALUES).optional(),
+  isAdmin: z.boolean().optional(),
+  idSetor: z.number().int().positive("ID do setor deve ser um numero positivo").optional(),
+});
+
+export type UpdateUsuarioInput = z.infer<typeof UpdateUsuarioSchema>;
 
 // Validção de ID
 export const IdParamSchema = z.object({

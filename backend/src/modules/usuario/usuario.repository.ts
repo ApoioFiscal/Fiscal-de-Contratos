@@ -1,6 +1,6 @@
 import { FuncaoUsuario } from "@prisma/client";
 import { prisma } from "../../prisma/client";
-import { CreateUsuarioInput } from "../../common/schemas";
+import { CreateUsuarioInput, UpdateUsuarioInput } from "../../common/schemas";
 
 interface UsuarioComSetor {
   id: number;
@@ -35,6 +35,14 @@ export class UsuarioRepository {
 
   async create(data: CreateUsuarioInput & { senha: string }): Promise<UsuarioComSetor> {
     return prisma.usuario.create({
+      data,
+      select: this.usuarioSelect,
+    }) as Promise<UsuarioComSetor>;
+  }
+
+  async update(id: number, data: UpdateUsuarioInput & { senha?: string }): Promise<UsuarioComSetor> {
+    return prisma.usuario.update({
+      where: { id },
       data,
       select: this.usuarioSelect,
     }) as Promise<UsuarioComSetor>;
