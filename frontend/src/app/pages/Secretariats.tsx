@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { apiRequest, ApiError } from "@/services/api";
 import type { TipoSetor } from "@/types/auth";
+import { ConfirmDialog } from "@/app/components/ConfirmDialog";
 
 const TIPO_SETOR_LABEL: Record<TipoSetor, string> = {
   GABINETE: "Gabinete",
@@ -99,6 +100,14 @@ export function Secretariats() {
   const [carregando, setCarregando] = useState(true);
   const [search, setSearch] = useState("");
 
+  // Confirmação de exclusão em card próprio (sem `window.confirm`).
+  const [exclusao, setExclusao] = useState<
+    | { tipo: "setor"; id: string; nome: string }
+    | { tipo: "usuario"; id: string; nome: string }
+    | null
+  >(null);
+  const [excluindo, setExcluindo] = useState(false);
+
   const normalizarUsuario = (u: any): UsuarioVinculado => ({
     ...u,
     id: String(u.id),
@@ -182,18 +191,9 @@ export function Secretariats() {
     }
   };
 
-  const handleDeleteSecretariat = async (id: string) => {
+  const handleDeleteSecretariat = (id: string, nome: string) => {
     setErroGeral("");
-    if (!window.confirm("Tem certeza que deseja excluir esta secretaria?")) return;
-
-    try {
-      await apiRequest(`/setores/${id}`, { method: "DELETE" });
-
-      setSecretariats(secretariats.filter((s) => String(s.id) !== String(id)));
-    } catch (error) {
-      console.error("Erro ao deletar secretaria:", error);
-      setErroGeral(mensagemDeErro(error, "Não foi possível excluir o setor."));
-    }
+    setExclusao({ tipo: "setor", id, nome });
   };
 
   const handleAddSecretary = async (e: React.FormEvent) => {
@@ -233,16 +233,36 @@ export function Secretariats() {
     }
   };
 
-  const handleDeleteSecretary = async (id: string) => {
+  const handleDeleteSecretary = (id: string, nome: string) => {
     setErroGeral("");
-    if (!window.confirm("Tem certeza que deseja excluir este usuário?")) return;
+    setExclusao({ tipo: "usuario", id, nome });
+  };
 
+  const confirmarExclusao = async () => {
+    if (!exclusao) return;
+    setExcluindo(true);
     try {
-      await apiRequest(`/usuarios/${id}`, { method: "DELETE" });
-      setUsuarios(usuarios.filter((u) => String(u.id) !== String(id)));
+      if (exclusao.tipo === "setor") {
+        await apiRequest(`/setores/${exclusao.id}`, { method: "DELETE" });
+        setSecretariats((atuais) => atuais.filter((s) => String(s.id) !== String(exclusao.id)));
+      } else {
+        await apiRequest(`/usuarios/${exclusao.id}`, { method: "DELETE" });
+        setUsuarios((atuais) => atuais.filter((u) => String(u.id) !== String(exclusao.id)));
+      }
+      setExclusao(null);
     } catch (error) {
-      console.error("Erro ao deletar secretário:", error);
-      setErroGeral(mensagemDeErro(error, "Não foi possível excluir o usuário."));
+      console.error("Erro ao excluir:", error);
+      setErroGeral(
+        mensagemDeErro(
+          error,
+          exclusao.tipo === "setor"
+            ? "Não foi possível excluir o setor."
+            : "Não foi possível excluir o usuário.",
+        ),
+      );
+      setExclusao(null);
+    } finally {
+      setExcluindo(false);
     }
   };
 
@@ -531,7 +551,7 @@ export function Secretariats() {
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  handleDeleteSecretariat(sec.id);
+                                  handleDeleteSecretariat(sec.id, sec.nome);
                                 }}
                                 title="Excluir setor"
                                 aria-label={`Excluir ${sec.nome}`}
@@ -589,7 +609,7 @@ export function Secretariats() {
                               <Pencil className="w-4 h-4" />
                             </button>
                             <button
-                              onClick={() => handleDeleteSecretary(secUser.id)}
+                              onClick={() => handleDeleteSecretary(secUser.id, secUser.nome)}
                               title="Excluir usuário"
                               aria-label={`Excluir ${secUser.nome}`}
                               className="p-1.5 text-slate-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition-colors"
@@ -881,6 +901,24 @@ export function Secretariats() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        aberto={exclusao !== null}
+        titulo={exclusao?.tipo === "setor" ? "Excluir setor/secretaria" : "Excluir usuário"}
+        descricao={
+          exclusao ? (
+            <>
+              Tem certeza que deseja excluir{" "}
+              <strong className="text-slate-900">{exclusao.nome}</strong>?
+              Esta ação não pode ser desfeita.
+            </>
+          ) : null
+        }
+        rotuloConfirmar={exclusao?.tipo === "setor" ? "Excluir setor" : "Excluir usuário"}
+        processando={excluindo}
+        onConfirmar={() => void confirmarExclusao()}
+        onCancelar={() => setExclusao(null)}
+      />
     </div>
   );
 }

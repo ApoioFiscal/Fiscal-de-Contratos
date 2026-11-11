@@ -25,6 +25,7 @@ import type { Contrato, ContratoItem, StatusContrato } from "@/types/domain";
 import { STATUS_CONTRATO_LABEL } from "@/types/domain";
 import type { ImportacaoContratoResult } from "@/services/contratos";
 import { ContratoReviewDrawer } from "@/app/components/ContratoReviewDrawer";
+import { ConfirmDialog } from "@/app/components/ConfirmDialog";
 
 const fmt = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 
@@ -55,6 +56,8 @@ export function Contracts() {
   const [contratoEmRevisao, setContratoEmRevisao] = useState<Contrato | null>(null);
 
   const [confirmandoId, setConfirmandoId] = useState<number | null>(null);
+  const [contratoParaExcluir, setContratoParaExcluir] = useState<Contrato | null>(null);
+  const [excluindo, setExcluindo] = useState(false);
   const [swalError, setSwalError] = useState<string | null>(null);
 
   const reload = useCallback(() => {
@@ -112,14 +115,23 @@ export function Contracts() {
     }
   };
 
-  const handleExcluir = async (contrato: Contrato) => {
-    if (!window.confirm(`Excluir o contrato ${contrato.numero}? Esta acao nao pode ser desfeita.`)) return;
+  const handleExcluir = (contrato: Contrato) => {
     setSwalError(null);
+    setContratoParaExcluir(contrato);
+  };
+
+  const confirmarExclusao = async () => {
+    if (!contratoParaExcluir) return;
+    setExcluindo(true);
     try {
-      await excluirContrato(contrato.id);
+      await excluirContrato(contratoParaExcluir.id);
+      setContratoParaExcluir(null);
       await reload();
     } catch (err) {
       setSwalError(err instanceof Error ? err.message : "Nao foi possivel excluir o contrato.");
+      setContratoParaExcluir(null);
+    } finally {
+      setExcluindo(false);
     }
   };
 
@@ -329,7 +341,7 @@ export function Contracts() {
                       )}
                       {podeCriar && (
                         <button
-                          onClick={() => void handleExcluir(c)}
+                          onClick={() => handleExcluir(c)}
                           className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium text-rose-700 bg-white border border-rose-300 hover:bg-rose-50 transition-colors"
                         >
                           <X className="w-4 h-4" />
@@ -452,6 +464,23 @@ export function Contracts() {
           }}
         />
       )}
+
+      <ConfirmDialog
+        aberto={contratoParaExcluir !== null}
+        titulo="Excluir contrato"
+        descricao={
+          contratoParaExcluir ? (
+            <>
+              Excluir o contrato <strong className="text-slate-900">{contratoParaExcluir.numero}</strong>?
+              Esta ação não pode ser desfeita.
+            </>
+          ) : null
+        }
+        rotuloConfirmar="Excluir contrato"
+        processando={excluindo}
+        onConfirmar={() => void confirmarExclusao()}
+        onCancelar={() => setContratoParaExcluir(null)}
+      />
     </div>
   );
 }

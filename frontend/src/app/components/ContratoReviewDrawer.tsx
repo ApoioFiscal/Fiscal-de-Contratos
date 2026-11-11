@@ -116,38 +116,6 @@ const paraNumeroOuNull = (valor: string) => {
 };
 const dataInput = (valor: string | null) => (valor ? valor.slice(0, 10) : "");
 
-// Converte os códigos técnicos de `item.correcoes` (gerados pelo parsing) em
-// texto legível. Códigos desconhecidos são exibidos sem inventar significado.
-const traduzirCorrecao = (correcao: string): string => {
-  const codigo = correcao.trim();
-
-  const unidade = /^unidade_corrigida_de_(.+?)_para_(.+)$/.exec(codigo);
-  if (unidade) {
-    return `Unidade lida como "${unidade[1]}" e ajustada para "${unidade[2]}". Confira no PDF.`;
-  }
-
-  const unitarioCorrigido = /^valor_unitario_corrigido_de_(.+?)_para_(.+)$/.exec(codigo);
-  if (unitarioCorrigido) {
-    return `Valor unitário ajustado de ${unitarioCorrigido[1]} para ${unitarioCorrigido[2]}. Confira no PDF.`;
-  }
-
-  const totalRecalculado = /^valor_total_recalculado_de_(.+)$/.exec(codigo);
-  if (totalRecalculado) {
-    return `Valor total recalculado (o lido no PDF era ${totalRecalculado[1]}). Confira no PDF.`;
-  }
-
-  const unitarioRecalculado = /^valor_unitario_recalculado_de_(.+)$/.exec(codigo);
-  if (unitarioRecalculado) {
-    return `Valor unitário recalculado (o lido no PDF era ${unitarioRecalculado[1]}). Confira no PDF.`;
-  }
-
-  if (codigo === "descricao_reordenada_por_ocr") {
-    return "Descrição reordenada por ruído de OCR. Confira no PDF.";
-  }
-
-  return codigo.replace(/_/g, " ");
-};
-
 const criarParteDraft = (
   papel: PapelParte,
   parte?: ContratoParte,
@@ -319,7 +287,6 @@ export function ContratoReviewDrawer({
   const [vigenciaInicio, setVigenciaInicio] = useState(dataInput(contrato.vigenciaInicio));
   const [vigenciaFim, setVigenciaFim] = useState(dataInput(contrato.vigenciaFim));
   const [foro, setForo] = useState(texto(contrato.foro));
-  const [fundamentacao, setFundamentacao] = useState(contrato.fundamentacaoLegal.join("\n"));
 
   const [assinaturaLocal, setAssinaturaLocal] = useState(texto(contrato.assinaturaLocal));
   const [assinaturaData, setAssinaturaData] = useState(dataInput(contrato.assinaturaData));
@@ -528,10 +495,8 @@ export function ContratoReviewDrawer({
       assinaturaDigital,
       assinaturaPlataforma: textoOuNull(assinaturaPlataforma),
       assinaturaAssinante: textoOuNull(assinaturaAssinante),
-      fundamentacaoLegal: fundamentacao
-        .split("\n")
-        .map((linha) => linha.trim())
-        .filter(Boolean),
+      // `fundamentacaoLegal` não é editável na revisão: omitido do payload, o
+      // backend mantém o que veio da extração.
       condicoes: montarCondicoes(),
       partes: partesPayload,
       signatarios: signatariosPayload,
@@ -696,14 +661,6 @@ export function ContratoReviewDrawer({
                   value={vigenciaFim}
                   onChange={(e) => setVigenciaFim(e.target.value)}
                   className={inputClass}
-                />
-              </Campo>
-              <Campo rotulo="Fundamentação legal (uma por linha)" className="sm:col-span-2">
-                <textarea
-                  rows={3}
-                  value={fundamentacao}
-                  onChange={(e) => setFundamentacao(e.target.value)}
-                  className={`${inputClass} resize-none`}
                 />
               </Campo>
             </div>
@@ -1130,13 +1087,6 @@ export function ContratoReviewDrawer({
                           onChange={(e) => atualizarItem(item.key, "unidade", e.target.value)}
                           className={inputClass}
                         />
-                        {item.unidadeOriginal.trim() &&
-                          item.unidadeOriginal.trim().toLowerCase() !==
-                            item.unidade.trim().toLowerCase() && (
-                            <span className="block mt-1 text-[11px] text-slate-500">
-                              lido no PDF como "{item.unidadeOriginal}"
-                            </span>
-                          )}
                       </Campo>
                       <Campo rotulo="Quantidade">
                         <input
@@ -1190,19 +1140,6 @@ export function ContratoReviewDrawer({
                         </p>
                       </div>
                     </div>
-
-                    {item.correcoes.length > 0 && (
-                      <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-                        <p className="text-[11px] font-semibold text-amber-800">
-                          Correções aplicadas pelo OCR
-                        </p>
-                        <ul className="text-[11px] text-amber-700 mt-1 space-y-0.5">
-                          {item.correcoes.map((correcao, i) => (
-                            <li key={i}>• {traduzirCorrecao(correcao)}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
                   </div>
                 );
               })}
