@@ -2,7 +2,7 @@ import { ContratoExtractionSchema, AtualizarContratoSchema, AtualizarContratoInp
 import { ContratoRepository } from "./contrato.repository";
 import { ParsingClient } from "./parsingClient";
 import { mapearParaCriar, ContratoCreateData } from "./conversorContrato";
-import { NotFoundError, ValidationError, DuplicateContratoError } from "../../common/errors";
+import { NotFoundError, ValidationError, DuplicateContratoError, ContratoNaoExcluivelError } from "../../common/errors";
 
 export type ContratoResposta = {
   id: number;
@@ -67,6 +67,11 @@ export class ContratoService {
   }
 
   async delete(id: number) {
+    const contrato = await this.repository.findById(id);
+    if (!contrato) throw new NotFoundError("Contrato");
+    // Contrato confirmado/salvo é registro oficial: não pode ser excluído.
+    // Só o rascunho (PDF importado e ainda não confirmado) pode ser descartado.
+    if (contrato.status !== "RASCUNHO") throw new ContratoNaoExcluivelError();
     await this.repository.delete(id);
   }
   async atualizar(id: number, input: AtualizarContratoInput) {

@@ -4,6 +4,7 @@ export enum ErrorCode {
   DUPLICATE_EMAIL = "DUPLICATE_EMAIL",
   DUPLICATE_CONTRATO = "DUPLICATE_CONTRATO",
   CONTRATO_NAO_EDITAVEL = "CONTRATO_NAO_EDITAVEL",
+  CONTRATO_NAO_EXCLUIVEL = "CONTRATO_NAO_EXCLUIVEL",
   SETOR_NOT_FOUND = "SETOR_NOT_FOUND",
   USUARIO_NOT_FOUND = "USUARIO_NOT_FOUND",
   INVALID_ID = "INVALID_ID",
@@ -60,8 +61,8 @@ export class DuplicateContratoError extends AppError {
     super(
       ErrorCode.DUPLICATE_CONTRATO,
       identificacao
-        ? `O contrato ${identificacao} já foi importado. Exclua o contrato existente antes de reimportar.`
-        : "Este contrato já foi importado. Exclua o contrato existente antes de reimportar.",
+        ? `O contrato ${identificacao} já foi importado. Se o contrato existente ainda estiver em rascunho, exclua o rascunho antes de reimportar.`
+        : "Este contrato já foi importado. Se o contrato existente ainda estiver em rascunho, exclua o rascunho antes de reimportar.",
       409
     );
     this.name = "DuplicateContratoError";
@@ -76,6 +77,17 @@ export class ContratoNaoEditavelError extends AppError {
       409
     );
     this.name = "ContratoNaoEditavelError";
+  }
+}
+
+export class ContratoNaoExcluivelError extends AppError {
+  constructor() {
+    super(
+      ErrorCode.CONTRATO_NAO_EXCLUIVEL,
+      "Contratos já salvos não podem ser excluídos. Apenas rascunhos (importados e ainda não confirmados) podem ser descartados.",
+      409
+    );
+    this.name = "ContratoNaoExcluivelError";
   }
 }
 

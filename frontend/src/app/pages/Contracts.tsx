@@ -359,7 +359,7 @@ export function Contracts() {
                         Baixar PDF
                       </button>
                     )}
-                    {podeCriar && (
+                    {podeCriar && c.status === "RASCUNHO" && (
                       <button
                         onClick={() => handleExcluir(c)}
                         className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium text-rose-700 bg-white border border-rose-300 hover:bg-rose-50 transition-colors"

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
-import { DuplicateContratoError } from "../../common/errors";
+import { DuplicateContratoError, ContratoNaoExcluivelError, NotFoundError } from "../../common/errors";
 import { ContratoService } from "./contrato.service";
 
 /**
@@ -64,4 +64,50 @@ test("importação inédita persiste como RASCUNHO e devolve os avisos do parsin
   assert.equal(resultado.numero, "00141/2026-SDC");
   assert.equal(resultado.status, "RASCUNHO");
   assert.deepEqual(resultado.avisos, ["extração ok"]);
+});
+
+function criarServiceDelete(status: string | null) {
+  const chamadas = { delete: 0 };
+
+  const repository = {
+    findById: async () => (status ? { id: 5, status } : null),
+    delete: async () => {
+      chamadas.delete += 1;
+    },
+  };
+
+  return {
+    service: new ContratoService(repository as any, {} as any),
+    chamadas,
+  };
+}
+
+test("exclusão: rascunho (importado e não confirmado) pode ser descartado", async () => {
+  const { service, chamadas } = criarServiceDelete("RASCUNHO");
+
+  await service.delete(5);
+
+  assert.equal(chamadas.delete, 1);
+});
+
+test("exclusão: contrato salvo/confirmado não pode ser excluído", async () => {
+  for (const status of ["ATIVA", "EM_ADITAMENTO", "ENCERRADA", "VENCIDA"]) {
+    const { service, chamadas } = criarServiceDelete(status);
+
+    await assert.rejects(
+      () => service.delete(5),
+      (erro: unknown) => erro instanceof ContratoNaoExcluivelError && erro.statusCode === 409,
+    );
+    assert.equal(chamadas.delete, 0, `status ${status} não deveria excluir`);
+  }
+});
+
+test("exclusão: contrato inexistente responde 404", async () => {
+  const { service, chamadas } = criarServiceDelete(null);
+
+  await assert.rejects(
+    () => service.delete(5),
+    (erro: unknown) => erro instanceof NotFoundError && erro.statusCode === 404,
+  );
+  assert.equal(chamadas.delete, 0);
 });
