@@ -63,6 +63,8 @@ type SignatarioDraft = {
   endereco: string;
   confirmadoNoBloco: boolean;
   legivel: boolean;
+  /** true quando o usuário preencheu um nome que o OCR não leu (legivel === false). */
+  preenchidoManualmente: boolean;
 };
 
 type ItemDraft = {
@@ -114,6 +116,38 @@ const paraNumeroOuNull = (valor: string) => {
 };
 const dataInput = (valor: string | null) => (valor ? valor.slice(0, 10) : "");
 
+// Converte os códigos técnicos de `item.correcoes` (gerados pelo parsing) em
+// texto legível. Códigos desconhecidos são exibidos sem inventar significado.
+const traduzirCorrecao = (correcao: string): string => {
+  const codigo = correcao.trim();
+
+  const unidade = /^unidade_corrigida_de_(.+?)_para_(.+)$/.exec(codigo);
+  if (unidade) {
+    return `Unidade lida como "${unidade[1]}" e ajustada para "${unidade[2]}". Confira no PDF.`;
+  }
+
+  const unitarioCorrigido = /^valor_unitario_corrigido_de_(.+?)_para_(.+)$/.exec(codigo);
+  if (unitarioCorrigido) {
+    return `Valor unitário ajustado de ${unitarioCorrigido[1]} para ${unitarioCorrigido[2]}. Confira no PDF.`;
+  }
+
+  const totalRecalculado = /^valor_total_recalculado_de_(.+)$/.exec(codigo);
+  if (totalRecalculado) {
+    return `Valor total recalculado (o lido no PDF era ${totalRecalculado[1]}). Confira no PDF.`;
+  }
+
+  const unitarioRecalculado = /^valor_unitario_recalculado_de_(.+)$/.exec(codigo);
+  if (unitarioRecalculado) {
+    return `Valor unitário recalculado (o lido no PDF era ${unitarioRecalculado[1]}). Confira no PDF.`;
+  }
+
+  if (codigo === "descricao_reordenada_por_ocr") {
+    return "Descrição reordenada por ruído de OCR. Confira no PDF.";
+  }
+
+  return codigo.replace(/_/g, " ");
+};
+
 const criarParteDraft = (
   papel: PapelParte,
   parte?: ContratoParte,
@@ -149,6 +183,7 @@ const criarSignatarioDraft = (signatario: ContratoSignatario): SignatarioDraft =
   endereco: texto(signatario.endereco),
   confirmadoNoBloco: signatario.confirmadoNoBloco,
   legivel: signatario.legivel,
+  preenchidoManualmente: false,
 });
 
 const criarItemDraft = (item: ContratoItem): ItemDraft => ({
@@ -211,6 +246,11 @@ const botaoSecundario =
   "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 transition-colors";
 const botaoPerigo =
   "flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-medium text-rose-700 hover:bg-rose-50 transition-colors";
+const seloBase =
+  "inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[11px] font-medium";
+const seloOk = `${seloBase} bg-emerald-50 border-emerald-200 text-emerald-700`;
+const seloNeutro = `${seloBase} bg-slate-50 border-slate-200 text-slate-600`;
+const seloAtencao = `${seloBase} bg-amber-50 border-amber-200 text-amber-700`;
 
 function Campo({
   rotulo,
@@ -283,7 +323,8 @@ export function ContratoReviewDrawer({
 
   const [assinaturaLocal, setAssinaturaLocal] = useState(texto(contrato.assinaturaLocal));
   const [assinaturaData, setAssinaturaData] = useState(dataInput(contrato.assinaturaData));
-  const [assinaturaDigital, setAssinaturaDigital] = useState(contrato.assinaturaDigital);
+  // Somente leitura: é o resultado da detecção no PDF, não uma decisão do usuário.
+  const assinaturaDigital = contrato.assinaturaDigital;
   const [assinaturaPlataforma, setAssinaturaPlataforma] = useState(
     texto(contrato.assinaturaPlataforma),
   );
@@ -347,11 +388,16 @@ export function ContratoReviewDrawer({
     valor: string | boolean,
   ) => {
     setSignatarios((atuais) =>
-      atuais.map((signatario) =>
-        signatario.key === key
-          ? ({ ...signatario, [campo]: valor } as SignatarioDraft)
-          : signatario,
-      ),
+      atuais.map((signatario) => {
+        if (signatario.key !== key) return signatario;
+        const atualizado = { ...signatario, [campo]: valor } as SignatarioDraft;
+        if (campo === "nome") {
+          // Nome preenchido à mão substitui o "OCR não leu" e é enviado como legível.
+          atualizado.preenchidoManualmente =
+            !signatario.legivel && String(valor).trim().length > 0;
+        }
+        return atualizado;
+      }),
     );
   };
 
@@ -437,7 +483,7 @@ export function ContratoReviewDrawer({
       profissao: textoOuNull(signatario.profissao),
       endereco: textoOuNull(signatario.endereco),
       confirmadoNoBloco: signatario.confirmadoNoBloco,
-      legivel: signatario.legivel,
+      legivel: signatario.legivel || signatario.preenchidoManualmente,
     }));
 
     const itensPayload: ItemContratoPayload[] = itens.map((item) => ({
@@ -694,15 +740,13 @@ export function ContratoReviewDrawer({
                   className={inputClass}
                 />
               </Campo>
-              <label className="flex items-center gap-2 text-sm text-slate-700 sm:col-span-2">
-                <input
-                  type="checkbox"
-                  checked={assinaturaDigital}
-                  onChange={(e) => setAssinaturaDigital(e.target.checked)}
-                  className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                />
-                O PDF possui assinatura digital detectada
-              </label>
+              <div className="sm:col-span-2">
+                <span className={assinaturaDigital ? seloOk : seloNeutro}>
+                  {assinaturaDigital
+                    ? `Assinatura digital detectada${assinaturaPlataforma ? ` (${assinaturaPlataforma})` : ""}`
+                    : "Sem assinatura digital no PDF"}
+                </span>
+              </div>
             </div>
           </Secao>
 
@@ -989,33 +1033,27 @@ export function ContratoReviewDrawer({
                     </Campo>
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-4 text-xs text-slate-700">
-                    <label className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={signatario.confirmadoNoBloco}
-                        onChange={(e) =>
-                          atualizarSignatario(
-                            signatario.key,
-                            "confirmadoNoBloco",
-                            e.target.checked,
-                          )
-                        }
-                        className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      Confirmado no bloco de assinatura
-                    </label>
-                    <label className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={signatario.legivel}
-                        onChange={(e) =>
-                          atualizarSignatario(signatario.key, "legivel", e.target.checked)
-                        }
-                        className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      Dados legíveis no PDF
-                    </label>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className={signatario.confirmadoNoBloco ? seloOk : seloNeutro}>
+                      {signatario.confirmadoNoBloco
+                        ? "Confirmado no bloco de assinatura"
+                        : "Não confirmado no bloco de assinatura"}
+                    </span>
+                    <span
+                      className={
+                        signatario.preenchidoManualmente
+                          ? seloOk
+                          : signatario.legivel
+                            ? seloNeutro
+                            : seloAtencao
+                      }
+                    >
+                      {signatario.preenchidoManualmente
+                        ? "Preenchido manualmente"
+                        : signatario.legivel
+                          ? "Dados legíveis no PDF"
+                          : "OCR não leu — preencha o nome"}
+                    </span>
                   </div>
                 </div>
               ))}
@@ -1040,6 +1078,7 @@ export function ContratoReviewDrawer({
                       endereco: "",
                       confirmadoNoBloco: false,
                       legivel: true,
+                      preenchidoManualmente: false,
                     },
                   ])
                 }
@@ -1091,13 +1130,13 @@ export function ContratoReviewDrawer({
                           onChange={(e) => atualizarItem(item.key, "unidade", e.target.value)}
                           className={inputClass}
                         />
-                      </Campo>
-                      <Campo rotulo="Unidade original">
-                        <input
-                          value={item.unidadeOriginal}
-                          onChange={(e) => atualizarItem(item.key, "unidadeOriginal", e.target.value)}
-                          className={inputClass}
-                        />
+                        {item.unidadeOriginal.trim() &&
+                          item.unidadeOriginal.trim().toLowerCase() !==
+                            item.unidade.trim().toLowerCase() && (
+                            <span className="block mt-1 text-[11px] text-slate-500">
+                              lido no PDF como "{item.unidadeOriginal}"
+                            </span>
+                          )}
                       </Campo>
                       <Campo rotulo="Quantidade">
                         <input
@@ -1159,7 +1198,7 @@ export function ContratoReviewDrawer({
                         </p>
                         <ul className="text-[11px] text-amber-700 mt-1 space-y-0.5">
                           {item.correcoes.map((correcao, i) => (
-                            <li key={i}>• {correcao}</li>
+                            <li key={i}>• {traduzirCorrecao(correcao)}</li>
                           ))}
                         </ul>
                       </div>

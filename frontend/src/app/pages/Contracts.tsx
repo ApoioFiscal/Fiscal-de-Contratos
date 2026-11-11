@@ -373,19 +373,20 @@ export function Contracts() {
                     </div>
                   )}
 
-                  {(c.itensConferemTotalTabela !== null || c.itensConferemValorContrato !== null) && (
-                    <div className="mb-4 text-xs text-slate-600 bg-white border border-slate-200 rounded-lg p-3">
-                      <p className="font-semibold text-slate-700 mb-1">Validações da extração</p>
-                      <p className="text-slate-600">
-                        Soma dos itens confere o total da tabela: {c.itensConferemTotalTabela ? "sim" : "não"}
-                      </p>
-                      <p className="text-slate-600">
-                        Soma dos itens confere o valor do contrato: {c.itensConferemValorContrato ? "sim" : "não"}
-                      </p>
-                    </div>
-                  )}
+                  {c.status === "RASCUNHO" &&
+                    (c.itensConferemTotalTabela !== null || c.itensConferemValorContrato !== null) && (
+                      <div className="mb-4 text-xs text-slate-600 bg-white border border-slate-200 rounded-lg p-3">
+                        <p className="font-semibold text-slate-700 mb-1">Validações da extração</p>
+                        <p className="text-slate-600">
+                          Soma dos itens confere o total da tabela: {c.itensConferemTotalTabela ? "sim" : "não"}
+                        </p>
+                        <p className="text-slate-600">
+                          Soma dos itens confere o valor do contrato: {c.itensConferemValorContrato ? "sim" : "não"}
+                        </p>
+                      </div>
+                    )}
 
-                  {c.avisos.length > 0 && (
+                  {c.status === "RASCUNHO" && c.avisos.length > 0 && (
                     <div className="mb-4 bg-amber-50 border border-amber-200 rounded-lg p-3">
                       <p className="text-xs font-semibold text-amber-800 mb-1">Avisos do OCR</p>
                       <ul className="text-xs text-amber-700 space-y-1">
