@@ -263,11 +263,14 @@ function labelSignatario(signatario: SignatarioDraft, indice: number): string {
 export function ContratoReviewDrawer({
   contrato,
   podeConfirmar,
+  somenteLeitura = false,
   onClose,
   onSaved,
 }: {
   contrato: Contrato;
   podeConfirmar: boolean;
+  /** Quando true, exibe os dados completos sem permitir edição (visualização). */
+  somenteLeitura?: boolean;
   onClose: () => void;
   onSaved: (contrato: Contrato) => void;
 }) {
@@ -539,27 +542,39 @@ export function ContratoReviewDrawer({
     <div
       className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-end"
       role="dialog"
-      aria-label={`Revisar contrato ${contrato.numero}`}
+      aria-label={
+        somenteLeitura
+          ? `Dados do contrato ${contrato.numero}`
+          : `Revisar contrato ${contrato.numero}`
+      }
     >
       <div className="w-full max-w-3xl h-full bg-white flex flex-col shadow-2xl animate-in slide-in-from-right duration-300">
         <div className="flex items-start justify-between px-6 py-4 border-b border-slate-200">
           <div>
-            <h3 className="text-lg font-bold text-slate-900">Revisar contrato {contrato.numero}</h3>
+            <h3 className="text-lg font-bold text-slate-900">
+              {somenteLeitura
+                ? `Dados do contrato ${contrato.numero}`
+                : `Revisar contrato ${contrato.numero}`}
+            </h3>
             <p className="text-xs text-slate-500 mt-1">
-              Confira e corrija os dados lidos do PDF. O que você salvar aqui substitui os dados
-              importados; os avisos do OCR continuam registrados como histórico.
+              {somenteLeitura
+                ? "Visualização completa dos dados importados do PDF, em modo somente leitura."
+                : "Confira e corrija os dados lidos do PDF. O que você salvar aqui substitui os dados importados; os avisos do OCR continuam registrados como histórico."}
             </p>
           </div>
           <button
             onClick={onClose}
-            aria-label="Fechar revisão"
+            aria-label={somenteLeitura ? "Fechar visualização" : "Fechar revisão"}
             className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
+        <fieldset
+          disabled={somenteLeitura}
+          className="flex-1 min-w-0 overflow-y-auto px-6 py-5 space-y-6 [&_input:disabled]:bg-slate-50 [&_input:disabled]:text-slate-700 [&_input:disabled]:border-slate-200 [&_input:disabled]:cursor-default [&_textarea:disabled]:bg-slate-50 [&_textarea:disabled]:text-slate-700 [&_textarea:disabled]:border-slate-200 [&_select:disabled]:bg-slate-50 [&_select:disabled]:text-slate-700 [&_select:disabled]:border-slate-200"
+        >
           {erro && (
             <div className="flex items-center gap-2 bg-rose-50 border border-rose-200 text-rose-800 text-sm rounded-lg px-4 py-3">
               <AlertCircle className="w-4 h-4" />
@@ -567,7 +582,7 @@ export function ContratoReviewDrawer({
             </div>
           )}
 
-          {contrato.status !== "RASCUNHO" && (
+          {contrato.status !== "RASCUNHO" && !somenteLeitura && (
             <div className="flex items-center gap-2 bg-slate-100 border border-slate-200 text-slate-700 text-sm rounded-lg px-4 py-3">
               <AlertCircle className="w-4 h-4" />
               Este contrato já foi confirmado e está em modo somente leitura.
@@ -859,18 +874,20 @@ export function ContratoReviewDrawer({
                         </span>
                       )}
                     </div>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setSignatarios((atuais) =>
-                          atuais.filter((atual) => atual.key !== signatario.key),
-                        )
-                      }
-                      className={botaoPerigo}
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                      Remover
-                    </button>
+                    {!somenteLeitura && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setSignatarios((atuais) =>
+                            atuais.filter((atual) => atual.key !== signatario.key),
+                          )
+                        }
+                        className={botaoPerigo}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        Remover
+                      </button>
+                    )}
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1011,35 +1028,37 @@ export function ContratoReviewDrawer({
                 </div>
               ))}
 
-              <button
-                type="button"
-                onClick={() =>
-                  setSignatarios((atuais) => [
-                    ...atuais,
-                    {
-                      key: novaChave(),
-                      papel: "TESTEMUNHA",
-                      nome: "",
-                      cargo: "",
-                      cpf: "",
-                      cnpj: "",
-                      rg: "",
-                      orgaoEmissorRg: "",
-                      nacionalidade: "",
-                      estadoCivil: "",
-                      profissao: "",
-                      endereco: "",
-                      confirmadoNoBloco: false,
-                      legivel: true,
-                      preenchidoManualmente: false,
-                    },
-                  ])
-                }
-                className={botaoSecundario}
-              >
-                <Plus className="w-3.5 h-3.5" />
-                Adicionar signatário
-              </button>
+              {!somenteLeitura && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    setSignatarios((atuais) => [
+                      ...atuais,
+                      {
+                        key: novaChave(),
+                        papel: "TESTEMUNHA",
+                        nome: "",
+                        cargo: "",
+                        cpf: "",
+                        cnpj: "",
+                        rg: "",
+                        orgaoEmissorRg: "",
+                        nacionalidade: "",
+                        estadoCivil: "",
+                        profissao: "",
+                        endereco: "",
+                        confirmadoNoBloco: false,
+                        legivel: true,
+                        preenchidoManualmente: false,
+                      },
+                    ])
+                  }
+                  className={botaoSecundario}
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Adicionar signatário
+                </button>
+              )}
             </div>
           </Secao>
 
@@ -1057,16 +1076,18 @@ export function ContratoReviewDrawer({
                         Item {indice + 1}
                         {item.codigo ? ` · código ${item.codigo}` : ""}
                       </p>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setItens((atuais) => atuais.filter((atual) => atual.key !== item.key))
-                        }
-                        className={botaoPerigo}
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                        Remover
-                      </button>
+                      {!somenteLeitura && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setItens((atuais) => atuais.filter((atual) => atual.key !== item.key))
+                          }
+                          className={botaoPerigo}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          Remover
+                        </button>
+                      )}
                     </div>
 
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -1140,14 +1161,16 @@ export function ContratoReviewDrawer({
                 );
               })}
 
-              <button
-                type="button"
-                onClick={() => setItens((atuais) => [...atuais, novoItemDraft()])}
-                className={botaoSecundario}
-              >
-                <Plus className="w-3.5 h-3.5" />
-                Adicionar item
-              </button>
+              {!somenteLeitura && (
+                <button
+                  type="button"
+                  onClick={() => setItens((atuais) => [...atuais, novoItemDraft()])}
+                  className={botaoSecundario}
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Adicionar item
+                </button>
+              )}
             </div>
           </Secao>
 
@@ -1160,18 +1183,20 @@ export function ContratoReviewDrawer({
                 <div key={dotacao.key} className="border border-slate-200 rounded-xl p-4 space-y-3">
                   <div className="flex items-center justify-between gap-3">
                     <p className="text-sm font-semibold text-slate-800">Dotação {indice + 1}</p>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setDotacoes((atuais) =>
-                          atuais.filter((atual) => atual.key !== dotacao.key),
-                        )
-                      }
-                      className={botaoPerigo}
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                      Remover
-                    </button>
+                    {!somenteLeitura && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setDotacoes((atuais) =>
+                            atuais.filter((atual) => atual.key !== dotacao.key),
+                          )
+                        }
+                        className={botaoPerigo}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        Remover
+                      </button>
+                    )}
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <Campo rotulo="Código da unidade *">
@@ -1261,14 +1286,16 @@ export function ContratoReviewDrawer({
                 </div>
               ))}
 
-              <button
-                type="button"
-                onClick={() => setDotacoes((atuais) => [...atuais, novaDotacaoDraft()])}
-                className={botaoSecundario}
-              >
-                <Plus className="w-3.5 h-3.5" />
-                Adicionar dotação
-              </button>
+              {!somenteLeitura && (
+                <button
+                  type="button"
+                  onClick={() => setDotacoes((atuais) => [...atuais, novaDotacaoDraft()])}
+                  className={botaoSecundario}
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Adicionar dotação
+                </button>
+              )}
             </div>
           </Secao>
 
@@ -1337,40 +1364,51 @@ export function ContratoReviewDrawer({
               </Campo>
             </div>
           </Secao>
-        </div>
+        </fieldset>
 
         <div className="px-6 py-4 border-t border-slate-200 flex flex-wrap items-center justify-end gap-3">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-xl"
-          >
-            Cancelar
-          </button>
-          <button
-            onClick={() => void salvar(false)}
-            disabled={salvando !== null}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 disabled:opacity-50 rounded-xl"
-          >
-            {salvando === "rascunho" ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <CheckCircle2 className="w-4 h-4" />
-            )}
-            Salvar revisão
-          </button>
-          {podeConfirmar && (
+          {somenteLeitura ? (
             <button
-              onClick={() => void salvar(true)}
-              disabled={salvando !== null}
-              className="flex items-center gap-2 px-5 py-2 text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 rounded-xl"
+              onClick={onClose}
+              className="px-5 py-2 text-sm font-medium text-white bg-slate-900 hover:bg-slate-800 rounded-xl"
             >
-              {salvando === "confirmar" ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <CheckCircle2 className="w-4 h-4" />
-              )}
-              Salvar e confirmar (ATIVA)
+              Fechar
             </button>
+          ) : (
+            <>
+              <button
+                onClick={onClose}
+                className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-xl"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => void salvar(false)}
+                disabled={salvando !== null}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 disabled:opacity-50 rounded-xl"
+              >
+                {salvando === "rascunho" ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <CheckCircle2 className="w-4 h-4" />
+                )}
+                Salvar revisão
+              </button>
+              {podeConfirmar && (
+                <button
+                  onClick={() => void salvar(true)}
+                  disabled={salvando !== null}
+                  className="flex items-center gap-2 px-5 py-2 text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 rounded-xl"
+                >
+                  {salvando === "confirmar" ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <CheckCircle2 className="w-4 h-4" />
+                  )}
+                  Salvar e confirmar (ATIVA)
+                </button>
+              )}
+            </>
           )}
         </div>
       </div>

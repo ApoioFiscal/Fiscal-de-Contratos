@@ -20,6 +20,7 @@ import {
   FileDown,
   CalendarDays,
   PencilLine,
+  Eye,
 } from "lucide-react";
 import type { Contrato, ContratoItem, StatusContrato } from "@/types/domain";
 import { STATUS_CONTRATO_LABEL } from "@/types/domain";
@@ -54,6 +55,8 @@ export function Contracts() {
   const [isImporting, setIsImporting] = useState(false);
   const [ultimoImport, setUltimoImport] = useState<ImportacaoContratoResult | null>(null);
   const [contratoEmRevisao, setContratoEmRevisao] = useState<Contrato | null>(null);
+  // true quando o drawer é aberto para consulta dos dados completos (sem editar).
+  const [somenteLeitura, setSomenteLeitura] = useState(false);
 
   const [confirmandoId, setConfirmandoId] = useState<number | null>(null);
   const [contratoParaExcluir, setContratoParaExcluir] = useState<Contrato | null>(null);
@@ -93,6 +96,7 @@ export function Contracts() {
       // O OCR avisou que algo não foi lido: abre a revisão manual já preenchida.
       // Só abre se o contrato completo voltou do backend (senão faltam coleções).
       if ((resultado.avisos?.length ?? 0) > 0 && Array.isArray(resultado.partes)) {
+        setSomenteLeitura(false);
         setContratoEmRevisao(resultado as Contrato);
       }
     } catch (err) {
@@ -113,6 +117,16 @@ export function Contracts() {
     } finally {
       setConfirmandoId(null);
     }
+  };
+
+  const abrirVisualizacao = (contrato: Contrato) => {
+    setSomenteLeitura(true);
+    setContratoEmRevisao(contrato);
+  };
+
+  const abrirRevisao = (contrato: Contrato) => {
+    setSomenteLeitura(false);
+    setContratoEmRevisao(contrato);
   };
 
   const handleExcluir = (contrato: Contrato) => {
@@ -304,55 +318,60 @@ export function Contracts() {
 
               {expandedId === c.id && (
                 <div className="p-4 sm:px-6 bg-slate-50 border-t border-slate-100">
-                  {/* Ações de revisão / download */}
-                  {(c.status === "RASCUNHO" && podeCriar) || c.arquivoPdf ? (
-                    <div className="mb-4 flex flex-wrap items-center gap-3">
-                      {c.status === "RASCUNHO" && podeCriar && (
-                        <>
-                          <button
-                            onClick={() => setContratoEmRevisao(c)}
-                            className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium text-blue-700 bg-white border border-blue-300 hover:bg-blue-50 transition-colors"
-                          >
-                            <PencilLine className="w-4 h-4" />
-                            Revisar dados
-                          </button>
-                          <button
-                            onClick={() => void handleConfirmarRevisao(c)}
-                            disabled={confirmandoId === c.id}
-                            className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 transition-colors"
-                          >
-                            {confirmandoId === c.id ? (
-                              <Loader2 className="w-4 h-4 animate-spin" />
-                            ) : (
-                              <CheckCircle2 className="w-4 h-4" />
-                            )}
-                            Confirmar Revisão (ATIVA)
-                          </button>
-                        </>
-                      )}
-                      {c.arquivoPdf && (
+                  {/* Consulta dos dados completos + ações de revisão / download */}
+                  <div className="mb-4 flex flex-wrap items-center gap-3">
+                    <button
+                      onClick={() => abrirVisualizacao(c)}
+                      className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium text-slate-700 bg-white border border-slate-300 hover:bg-slate-100 transition-colors"
+                    >
+                      <Eye className="w-4 h-4" />
+                      Visualizar dados
+                    </button>
+                    {c.status === "RASCUNHO" && podeCriar && (
+                      <>
                         <button
-                          onClick={() => void handleBaixarPdf(c)}
-                          className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium text-slate-700 bg-white border border-slate-300 hover:bg-slate-100 transition-colors"
+                          onClick={() => abrirRevisao(c)}
+                          className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium text-blue-700 bg-white border border-blue-300 hover:bg-blue-50 transition-colors"
                         >
-                          <FileDown className="w-4 h-4" />
-                          Baixar PDF
+                          <PencilLine className="w-4 h-4" />
+                          Revisar dados
                         </button>
-                      )}
-                      {podeCriar && (
                         <button
-                          onClick={() => handleExcluir(c)}
-                          className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium text-rose-700 bg-white border border-rose-300 hover:bg-rose-50 transition-colors"
+                          onClick={() => void handleConfirmarRevisao(c)}
+                          disabled={confirmandoId === c.id}
+                          className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 transition-colors"
                         >
-                          <X className="w-4 h-4" />
-                          Excluir
+                          {confirmandoId === c.id ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <CheckCircle2 className="w-4 h-4" />
+                          )}
+                          Confirmar Revisão (ATIVA)
                         </button>
-                      )}
-                      {c.status === "RASCUNHO" && !podeCriar && (
-                        <span className="text-xs text-slate-500">Apenas Licitações/Gabinete confirmam a revisão.</span>
-                      )}
-                    </div>
-                  ) : null}
+                      </>
+                    )}
+                    {c.arquivoPdf && (
+                      <button
+                        onClick={() => void handleBaixarPdf(c)}
+                        className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium text-slate-700 bg-white border border-slate-300 hover:bg-slate-100 transition-colors"
+                      >
+                        <FileDown className="w-4 h-4" />
+                        Baixar PDF
+                      </button>
+                    )}
+                    {podeCriar && (
+                      <button
+                        onClick={() => handleExcluir(c)}
+                        className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium text-rose-700 bg-white border border-rose-300 hover:bg-rose-50 transition-colors"
+                      >
+                        <X className="w-4 h-4" />
+                        Excluir
+                      </button>
+                    )}
+                    {c.status === "RASCUNHO" && !podeCriar && (
+                      <span className="text-xs text-slate-500">Apenas Licitações/Gabinete confirmam a revisão.</span>
+                    )}
+                  </div>
 
                   <div className="mb-4 grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                     <div>
@@ -453,9 +472,10 @@ export function Contracts() {
 
       {contratoEmRevisao && (
         <ContratoReviewDrawer
-          key={contratoEmRevisao.id}
+          key={`${contratoEmRevisao.id}-${somenteLeitura ? "visualizacao" : "revisao"}`}
           contrato={contratoEmRevisao}
           podeConfirmar={podeCriar}
+          somenteLeitura={somenteLeitura}
           onClose={() => setContratoEmRevisao(null)}
           onSaved={() => {
             setContratoEmRevisao(null);
