@@ -62,7 +62,6 @@ export const ItemContratoSchema = z.object({
   quantidade: z.number().nonnegative(),
   valor_unitario: z.number().nonnegative(),
   valor_total: z.number().nonnegative(),
-  correcoes: z.array(z.string()),
 });
 
 export const DotacaoContratoSchema = z.object({
@@ -221,7 +220,6 @@ export const ItemContratoRevisaoSchema = z.object({
   valorUnitario: z.number().nonnegative(),
   /** Quando omitido, o backend calcula `quantidade * valorUnitario`. */
   valorTotal: z.number().nonnegative().optional(),
-  correcoes: z.array(z.string()).optional(),
 });
 
 export const DotacaoContratoRevisaoSchema = z.object({

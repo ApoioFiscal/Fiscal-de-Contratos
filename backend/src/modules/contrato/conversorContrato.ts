@@ -127,7 +127,6 @@ export const mapearParaCriar = (data: ContratoExtraction): ContratoCreateData =>
         quantidade: item.quantidade,
         valorUnitario: item.valor_unitario,
         valorTotal: item.valor_total,
-        correcoes: item.correcoes,
       })),
     },
     dotacoes: {

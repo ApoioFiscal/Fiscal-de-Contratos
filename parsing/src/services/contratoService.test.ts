@@ -78,13 +78,8 @@ test('contrato real: itens reconciliados contra ruído de OCR', () => {
     c.itens[0].descricao,
     'PLACA EM ACM COM ESTRUTURA METÁLICA GALVANIZADA COM INSTALAÇÃO NO LOCAL.',
   );
-  assert.ok(c.itens[0].correcoes.includes('descricao_reordenada_por_ocr'));
-  assert.ok(c.itens[0].correcoes.some((x) => x.startsWith('valor_unitario_corrigido_de_289,06')));
-  assert.ok(c.itens[3].correcoes.some((x) => x.startsWith('valor_total_recalculado_de_')));
-
-  // item limpo não deve acusar correção alguma
-  assert.deepEqual(c.itens[1].correcoes, []);
-  assert.deepEqual(c.itens[4].correcoes, []);
+  // Os itens corrigidos por conflito de OCR aparecem no aviso geral.
+  assert.ok(c.avisos.some((a) => /ajustados por conflito de OCR/i.test(a)));
 });
 
 test('contrato real: valor total e validações de soma', () => {
@@ -246,10 +241,10 @@ test('contrato sintético: outra modalidade, contratado com representante, vigê
   assert.ok(c.avisos.some((a) => /calculada/i.test(a)));
 
   assert.deepEqual(
-    c.itens.map((i) => [i.descricao, i.unidade, i.quantidade, i.valor_unitario, i.valor_total, i.correcoes.length]),
+    c.itens.map((i) => [i.descricao, i.unidade, i.quantidade, i.valor_unitario, i.valor_total]),
     [
-      ['CANETA ESFEROGRÁFICA AZUL', 'Cx', 100, 12.5, 1250, 0],
-      ['PAPEL A4 75G BRANCO', 'Resma', 200, 25, 5000, 0],
+      ['CANETA ESFEROGRÁFICA AZUL', 'Cx', 100, 12.5, 1250],
+      ['PAPEL A4 75G BRANCO', 'Resma', 200, 25, 5000],
     ],
   );
   assert.equal(c.valor_total, 6250);

@@ -77,7 +77,6 @@ type ItemDraft = {
   quantidade: string;
   valorUnitario: string;
   valorTotal: string;
-  correcoes: string[];
 };
 
 type DotacaoDraft = {
@@ -164,7 +163,6 @@ const criarItemDraft = (item: ContratoItem): ItemDraft => ({
   quantidade: item.quantidade != null ? String(item.quantidade) : "",
   valorUnitario: item.valorUnitario != null ? String(item.valorUnitario) : "",
   valorTotal: item.valorTotal != null ? String(item.valorTotal) : "",
-  correcoes: item.correcoes ?? [],
 });
 
 const novoItemDraft = (): ItemDraft => ({
@@ -176,7 +174,6 @@ const novoItemDraft = (): ItemDraft => ({
   quantidade: "",
   valorUnitario: "",
   valorTotal: "",
-  correcoes: [],
 });
 
 const criarDotacaoDraft = (dotacao: Contrato["dotacoes"][number]): DotacaoDraft => ({
@@ -462,7 +459,6 @@ export function ContratoReviewDrawer({
       quantidade: paraNumero(item.quantidade),
       valorUnitario: paraNumero(item.valorUnitario),
       valorTotal: item.valorTotal.trim() ? paraNumero(item.valorTotal) : undefined,
-      correcoes: item.correcoes,
     }));
 
     const dotacoesPayload: DotacaoContratoPayload[] = dotacoes.map((dotacao) => ({

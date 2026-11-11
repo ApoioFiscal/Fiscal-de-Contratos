@@ -116,11 +116,7 @@
       "unidade_original": "M2",
       "quantidade": 50,
       "valor_unitario": 289,
-      "valor_total": 14450,
-      "correcoes": [
-        "valor_unitario_corrigido_de_289,06_para_289.00",
-        "descricao_reordenada_por_ocr"
-      ]
+      "valor_total": 14450
     },
     {
       "codigo": 2,
@@ -129,8 +125,7 @@
       "unidade_original": "M2",
       "quantidade": 10,
       "valor_unitario": 859,
-      "valor_total": 8590,
-      "correcoes": []
+      "valor_total": 8590
     },
     {
       "codigo": 3,
@@ -139,10 +134,7 @@
       "unidade_original": "N42",
       "quantidade": 10,
       "valor_unitario": 267,
-      "valor_total": 2670,
-      "correcoes": [
-        "unidade_corrigida_de_N42_para_m²"
-      ]
+      "valor_total": 2670
     },
     {
       "codigo": 4,
@@ -151,10 +143,7 @@
       "unidade_original": "M2",
       "quantidade": 15,
       "valor_unitario": 497,
-      "valor_total": 7455,
-      "correcoes": [
-        "valor_total_recalculado_de_7.455,0(1"
-      ]
+      "valor_total": 7455
     },
     {
       "codigo": 5,
@@ -163,8 +152,7 @@
       "unidade_original": "M2",
       "quantidade": 10,
       "valor_unitario": 397,
-      "valor_total": 3970,
-      "correcoes": []
+      "valor_total": 3970
     }
   ],
   "dotacoes": [
@@ -242,7 +230,7 @@
     "soma_itens_confere_valor_do_contrato": true
   },
   "avisos": [
-    "3 item(ns) tiveram valor, unidade ou descrição ajustados por conflito de OCR (ver 'correcoes'): confira com o PDF.",
+    "3 item(ns) tiveram valor, unidade ou descrição ajustados por conflito de OCR: confira com o PDF.",
     "O objeto contém trecho com ruído de OCR (pontuação solta): revise o texto.",
     "Bloco de assinatura do contratante ilegível no OCR: os dados do signatário foram tirados da qualificação das partes. Confira a assinatura no PDF.",
     "2 testemunha(s) não puderam ser lidas (assinatura/identificação manuscrita): preencha manualmente."

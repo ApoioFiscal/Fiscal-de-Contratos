@@ -98,7 +98,6 @@ export interface ContratoItem {
   quantidade: number;
   valorUnitario: number;
   valorTotal: number;
-  correcoes: string[];
   recebido: number;
   consumido: number;
 }

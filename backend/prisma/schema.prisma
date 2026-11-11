@@ -165,7 +165,6 @@ model ContratoItem {
   quantidade      Float
   valorUnitario   Float
   valorTotal      Float
-  correcoes       String[]
   recebido        Float                 @default(0)
   consumido       Float                 @default(0)
   contrato        Contrato              @relation(fields: [idContrato], references: [id])

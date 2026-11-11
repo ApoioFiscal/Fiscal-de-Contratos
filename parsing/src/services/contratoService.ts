@@ -8,7 +8,7 @@ import { parseBrazilianNumber } from './tableParserService';
  * Por isso:
  *  - os padrões de rótulo toleram variações de "nº";
  *  - valores numéricos são reconciliados (quantidade × unitário = total) e os itens
- *    corrigidos são identificados em `correcoes`;
+ *    corrigidos geram um aviso para conferência no PDF;
  *  - o que não pôde ser lido com segurança fica `null` e gera um `avisos[]`, em vez de
  *    gravar um valor provavelmente errado.
  */
@@ -62,8 +62,6 @@ export type ItemContrato = {
   quantidade: number;
   valor_unitario: number;
   valor_total: number;
-  /** Correções aplicadas por reconciliação (vazio quando o item foi lido sem ajustes). */
-  correcoes: string[];
 };
 
 export type DotacaoContrato = {
@@ -494,25 +492,30 @@ const locateItemRows = (lines: string[]): { rows: RawRow[]; totalTabela: number 
  * linhas, ela é, na prática, a primeira palavra da 2ª linha visual da célula
  * ("/GALVANIZADA" + "…METÁLICA" + "COM INSTALAÇÃO…" => "…METÁLICA GALVANIZADA COM INSTALAÇÃO…").
  */
-const buildDescricao = (descLines: string[], correcoes: string[]): string => {
+const buildDescricao = (descLines: string[]): { descricao: string; reordenada: boolean } => {
   const lines = [...descLines];
   const first = lines[0] ?? '';
+  let reordenada = false;
 
   if (lines.length >= 3 && /^[^\p{L}\p{N}]+[\p{L}]+$/u.test(first)) {
     const displaced = first.replace(/^[^\p{L}\p{N}]+/u, '');
     lines.splice(0, 1);
     lines.splice(1, 0, displaced);
-    correcoes.push('descricao_reordenada_por_ocr');
+    reordenada = true;
   }
 
-  return clean(lines.join(' ').replace(/^[^\p{L}\p{N}]+/u, '')) ?? '';
+  return {
+    descricao: clean(lines.join(' ').replace(/^[^\p{L}\p{N}]+/u, '')) ?? '',
+    reordenada,
+  };
 };
 
 const reconcileItems = (
   rows: RawRow[],
-): { itens: ItemContrato[]; avisos: string[] } => {
+): { itens: ItemContrato[]; avisos: string[]; corrigidos: number } => {
   const itens: ItemContrato[] = [];
   const avisos: string[] = [];
+  let corrigidos = 0;
 
   for (const row of rows) {
     if (!row.tail) {
@@ -520,7 +523,7 @@ const reconcileItems = (
       continue;
     }
 
-    const correcoes: string[] = [];
+    let ajustado = false;
     const quantidade = parseBrazilianNumber(row.tail.quantidade);
     let unitario = parseBrazilianNumber(row.tail.unitario);
     let total = parseBrazilianNumber(row.tail.total);
@@ -535,28 +538,30 @@ const reconcileItems = (
         // Total legível e unitário inconsistente: refaz o unitário a partir do total.
         const derived = Math.round((total / quantidade) * 100) / 100;
         if (sameMoney(derived * quantidade, total)) {
-          correcoes.push(`valor_unitario_corrigido_de_${row.tail.unitario}_para_${derived.toFixed(2)}`);
           unitario = derived;
         } else {
           total = Math.round(quantidade * unitario * 100) / 100;
-          correcoes.push(`valor_total_recalculado_de_${row.tail.total}`);
         }
+        ajustado = true;
       }
     } else if (unitario !== null && total === null) {
       total = Math.round(quantidade * unitario * 100) / 100;
-      correcoes.push(`valor_total_recalculado_de_${row.tail.total}`);
+      ajustado = true;
     } else if (unitario === null && total !== null) {
       unitario = Math.round((total / quantidade) * 100) / 100;
-      correcoes.push(`valor_unitario_recalculado_de_${row.tail.unitario}`);
+      ajustado = true;
     } else {
       avisos.push(`Item ${row.codigo}: valores ilegíveis; preencha manualmente.`);
       continue;
     }
 
-    const descricao = buildDescricao(row.descLines, correcoes);
+    const { descricao, reordenada } = buildDescricao(row.descLines);
+    if (reordenada) ajustado = true;
+
     const { valor: unidade, suspeito } = normalizeUnidade(row.tail.unidade);
 
-    if (suspeito) correcoes.push(`unidade_corrigida_de_${row.tail.unidade}_para_${unidade}`);
+    if (suspeito) ajustado = true;
+    if (ajustado) corrigidos++;
 
     itens.push({
       codigo: row.codigo,
@@ -566,11 +571,10 @@ const reconcileItems = (
       quantidade,
       valor_unitario: unitario as number,
       valor_total: total as number,
-      correcoes,
     });
   }
 
-  return { itens, avisos };
+  return { itens, avisos, corrigidos };
 };
 
 // ---------------------------------------------------------------- dotação
@@ -932,10 +936,10 @@ export const extractContrato = (text: string): ContratoExtraction => {
     );
   }
 
-  const corrigidos = reconciled.itens.filter((item) => item.correcoes.length > 0);
-  if (corrigidos.length > 0) {
+  const corrigidos = reconciled.corrigidos;
+  if (corrigidos > 0) {
     avisos.push(
-      `${corrigidos.length} item(ns) tiveram valor, unidade ou descrição ajustados por conflito de OCR (ver 'correcoes'): confira com o PDF.`,
+      `${corrigidos} item(ns) tiveram valor, unidade ou descrição ajustados por conflito de OCR: confira com o PDF.`,
     );
   }
 

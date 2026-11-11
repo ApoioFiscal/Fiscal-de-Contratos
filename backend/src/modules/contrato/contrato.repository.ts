@@ -67,7 +67,6 @@ const dadosItem = (item: ItemContratoRevisao) => ({
   quantidade: item.quantidade,
   valorUnitario: item.valorUnitario,
   valorTotal: item.valorTotal ?? arredondar(item.quantidade * item.valorUnitario),
-  correcoes: item.correcoes ?? [],
 });
 
 const dadosDotacao = (dotacao: DotacaoContratoRevisao) => ({

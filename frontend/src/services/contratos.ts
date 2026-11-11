@@ -66,7 +66,6 @@ export interface ItemContratoPayload {
   quantidade: number;
   valorUnitario: number;
   valorTotal?: number;
-  correcoes: string[];
 }
 
 export interface DotacaoContratoPayload {
