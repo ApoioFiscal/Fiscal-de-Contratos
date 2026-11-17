@@ -35,7 +35,6 @@ test('contrato: bloco `contrato` anexado, topo sobrescrito e resumo dedicado', (
   assert.equal(structuredData.orgao, 'Prefeitura Municipal de Marizópolis');
   assert.equal(structuredData.cliente, 'Prefeitura Municipal de Marizópolis');
   assert.equal(structuredData.cnpj_orgao, '01.612.941/0001-49');
-  assert.equal(structuredData.responsavel, 'Lucas Gonçalves Braga');
   assert.equal(structuredData.data_documento, '19/08/2026');
 
   assert.match(extractionSummary, /^Contrato 00141\/2026-SDC/);

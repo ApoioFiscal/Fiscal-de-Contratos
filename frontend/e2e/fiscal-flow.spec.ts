@@ -126,11 +126,18 @@ test.describe("Secretaria (saude@marizopolis.gov.br)", () => {
   test("cria um novo pedido de ponta a ponta", async ({ page }) => {
     await logar(page, EMAIL_SAUDE);
     await page.goto("/pedidos");
+    // A lista é assíncrona: contar antes do carregamento fazia o teste acreditar
+    // que não havia pedidos e quebrava em execuções repetidas.
+    await page.waitForFunction(() =>
+      /REQ-\d+/.test(document.body.innerText) || document.body.innerText.includes("Nenhum pedido encontrado."),
+    );
     const antes = await page.getByText(/^REQ-\d+$/).count();
     await page.getByRole("button", { name: "Novo Pedido" }).click();
     await selecionarContrato(page, "Contrato do pedido");
     await expect(page.getByText("Itens Disponíveis")).toBeVisible();
-    await page.getByRole("dialog", { name: "Novo Pedido" }).locator('input[type="number"]').first().fill("1");
+    const modal = page.getByRole("dialog", { name: "Novo Pedido" });
+    await modal.locator('input[type="date"]').fill("2026-12-31");
+    await modal.locator('input[type="number"]').first().fill("1");
     await page.getByRole("button", { name: "Criar Pedido" }).click();
     await expect(page.getByRole("dialog", { name: "Novo Pedido" })).toHaveCount(0);
     await expect(page.getByText(/^REQ-\d+$/)).toHaveCount(antes + 1);
@@ -147,12 +154,13 @@ test.describe("Secretaria de Licitações (lic@marizopolis.gov.br)", () => {
     await expect(itemNav(page, "Avaliacoes")).toHaveCount(0);
   });
 
-  test("fila de pedidos somente leitura (sem ações de status)", async ({ page }) => {
+  test("vê só os próprios pedidos, sem ações da fila de compras", async ({ page }) => {
     await logar(page, "lic@marizopolis.gov.br");
     await page.goto("/pedidos");
     await expect(page.getByText(/Solicitações do seu setor/)).toBeVisible();
     await expect(page.getByRole("button", { name: "Registrar Compra" })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Novo Pedido" })).toHaveCount(0);
+    // Licitações também pode solicitar para o próprio setor (ver regras de perfil).
+    await expect(page.getByRole("button", { name: "Novo Pedido" })).toHaveCount(1);
   });
 
   test("acompanha termos de renovação e não pode emitir", async ({ page }) => {
@@ -178,13 +186,9 @@ test.describe("Secretaria de Licitações (lic@marizopolis.gov.br)", () => {
     // estado `numero` quebrava a barra lateral com "is not a function".
     await expect(drawer.getByText(/Sugerido \(qtd × unitário\)/).first()).toBeVisible();
 
-    // O seed do E2E não cria signatários; a revisão manual serve justamente para
-    // preencher o que o OCR não trouxe. Se já houver testemunha, só corrige o nome.
-    const nomeTestemunha = drawer.getByLabel("Nome da testemunha 1");
-    if ((await nomeTestemunha.count()) === 0) {
-      await drawer.getByRole("button", { name: "Adicionar signatário" }).click();
-    }
-    await drawer.getByLabel("Nome da testemunha 1").fill("Maria Testemunha E2E");
+    // A revisão manual corrige o que o OCR não trouxe. O escopo reduzido não tem
+    // signatários; editamos um campo opcional para exercitar o salvamento.
+    await drawer.getByLabel("Número do processo").fill("260803DV00014-E2E");
 
     await drawer.getByRole("button", { name: "Salvar revisão" }).click();
     await expect(drawer).toHaveCount(0);
@@ -215,7 +219,7 @@ test.describe("Compras (compras@marizopolis.gov.br)", () => {
     await logar(page, "compras@marizopolis.gov.br");
     await page.goto("/contratos");
     await expect(page.getByText(NUMERO_CONTRATO)).toBeVisible();
-    await expect(page.getByRole("button", { name: "Confirmar Revisão" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Confirmar Revisão (ATIVA)" })).toHaveCount(0);
   });
 });
 

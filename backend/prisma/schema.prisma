@@ -59,23 +59,12 @@ model Contrato {
   numeroModalidade     String?
   objeto               String?
   valorTotal           Float?
-  // Vigência: `fim` pode ter sido calculada a partir de uma duração (ex.: "12 meses").
   vigenciaInicio       DateTime?
   vigenciaFim          DateTime?
-  vigenciaFimCalculada Boolean        @default(false)
-  vigenciaTrecho       String?
-  foro                 String?
   status               StatusContrato @default(RASCUNHO)
 
-  // Assinatura
-  assinaturaLocal      String?
-  assinaturaData       DateTime?
-  assinaturaDigital    Boolean   @default(false)
-  assinaturaPlataforma String?
-  assinaturaAssinante  String?
-
-  fundamentacaoLegal         String[]
-  condicoes                  Json?
+  // Auditoria da extração: avisos e validações continuam registrados. O bloco de
+  // assinatura é lido internamente só como fallback da vigência, mas não é exposto.
   avisos                     String[]
   itensConferemTotalTabela   Boolean?
   itensConferemValorContrato Boolean?
@@ -90,7 +79,6 @@ model Contrato {
   atualizadoEm   DateTime  @updatedAt
 
   partes          ContratoParte[]
-  signatarios     ContratoSignatario[]
   itens           ContratoItem[]
   dotacoes        ContratoDotacao[]
   setores         ContratoSetor[]
@@ -102,55 +90,18 @@ model Contrato {
   @@map("contrato")
 }
 
-// Contratante e contratado. O representante é a qualificação da pessoa física que
-// assina pela parte (cargo, CPF, RG, nacionalidade, estado civil, profissão).
+// Contratante e contratado: apenas nome/razão social e documento (CNPJ/CPF).
 model ContratoParte {
-  id                          Int            @id @default(autoincrement())
-  idContrato                  Int
-  papel                       PapelParte     @default(CONTRATADO)
-  nome                        String?
-  documento                   String?
-  tipoDocumento               TipoDocumento? @map("tipo_documento")
-  endereco                    String?
-  representanteNome           String?
-  representanteCargo          String?
-  representanteCpf            String?
-  representanteRg             String?
-  representanteOrgaoEmissorRg String?
-  representanteNacionalidade  String?
-  representanteEstadoCivil    String?
-  representanteProfissao      String?
-  representanteEndereco       String?
-  contrato                    Contrato       @relation(fields: [idContrato], references: [id])
+  id         Int         @id @default(autoincrement())
+  idContrato Int
+  papel      PapelParte  @default(CONTRATADO)
+  nome       String?
+  documento  String?
+  contrato   Contrato    @relation(fields: [idContrato], references: [id])
 
   @@unique([idContrato, papel])
   @@index([idContrato])
   @@map("contrato_parte")
-}
-
-// Quem assinou o PDF. `confirmadoNoBloco` = o nome foi confirmado no bloco de
-// assinatura (e não só na qualificação das partes); `legivel` = o OCR conseguiu ler.
-model ContratoSignatario {
-  id                Int             @id @default(autoincrement())
-  idContrato        Int
-  papel             PapelSignatario
-  ordem             Int             @default(0)
-  nome              String?
-  cargo             String?
-  cpf               String?
-  cnpj              String?
-  rg                String?
-  orgaoEmissorRg    String?
-  nacionalidade     String?
-  estadoCivil       String?
-  profissao         String?
-  endereco          String?
-  confirmadoNoBloco Boolean         @default(false)
-  legivel           Boolean         @default(true)
-  contrato          Contrato        @relation(fields: [idContrato], references: [id])
-
-  @@index([idContrato])
-  @@map("contrato_signatario")
 }
 
 // Item do contrato. `recebido`/`consumido` são operacionais (estoque/pedidos) e não
@@ -417,17 +368,6 @@ enum StatusContrato {
 enum PapelParte {
   CONTRATANTE
   CONTRATADO
-}
-
-enum PapelSignatario {
-  CONTRATANTE
-  CONTRATADO
-  TESTEMUNHA
-}
-
-enum TipoDocumento {
-  CNPJ
-  CPF
 }
 
 // De onde saiu o vínculo contrato ↔ secretaria.

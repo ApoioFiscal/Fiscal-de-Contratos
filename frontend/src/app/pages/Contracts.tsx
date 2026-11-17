@@ -25,6 +25,11 @@ import {
 import type { Contrato, ContratoItem, StatusContrato } from "@/types/domain";
 import { STATUS_CONTRATO_LABEL } from "@/types/domain";
 import type { ImportacaoContratoResult } from "@/services/contratos";
+import {
+  MENSAGEM_DADOS_NAO_EXTRAIDOS,
+  estadoDoContrato,
+  podeConfirmarContrato,
+} from "@/services/validacaoContrato";
 import { ContratoReviewDrawer } from "@/app/components/ContratoReviewDrawer";
 import { ConfirmDialog } from "@/app/components/ConfirmDialog";
 
@@ -180,6 +185,10 @@ export function Contracts() {
     return dias;
   };
 
+  // Mesmo bloqueio do drawer e do backend, aplicado ao estado já salvo do
+  // contrato (o botão da lista confirma sem abrir o formulário).
+  const revisaoPendente = (c: Contrato) => !podeConfirmarContrato(estadoDoContrato(c));
+
   return (
     <div className="max-w-7xl mx-auto space-y-6">
       {swalError && (
@@ -200,13 +209,6 @@ export function Contracts() {
             <p className="text-xs text-emerald-700 mt-0.5">
               ID {ultimoImport.id} · Status: {STATUS_CONTRATO_LABEL[ultimoImport.status as StatusContrato] ?? ultimoImport.status}
             </p>
-            {ultimoImport.avisos.length > 0 && (
-              <div className="mt-2 text-xs text-amber-700">
-                {ultimoImport.avisos.map((a, i) => (
-                  <p key={i}>• {a}</p>
-                ))}
-              </div>
-            )}
           </div>
         </div>
       )}
@@ -338,8 +340,13 @@ export function Contracts() {
                         </button>
                         <button
                           onClick={() => void handleConfirmarRevisao(c)}
-                          disabled={confirmandoId === c.id}
-                          className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+                          disabled={confirmandoId === c.id || revisaoPendente(c)}
+                          title={
+                            revisaoPendente(c)
+                              ? "Revise os dados pendentes antes de confirmar"
+                              : undefined
+                          }
+                          className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-300 disabled:cursor-not-allowed transition-colors"
                         >
                           {confirmandoId === c.id ? (
                             <Loader2 className="w-4 h-4 animate-spin" />
@@ -373,7 +380,7 @@ export function Contracts() {
                     )}
                   </div>
 
-                  <div className="mb-4 grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                  <div className="mb-4 grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
                     <div>
                       <span className="block text-slate-500 text-xs mb-1">Contratante</span>
                       <span className="font-medium text-slate-900">{nomeParte(c, "CONTRATANTE")}</span>
@@ -381,10 +388,6 @@ export function Contracts() {
                     <div>
                       <span className="block text-slate-500 text-xs mb-1">Contratado</span>
                       <span className="font-medium text-slate-900">{nomeParte(c, "CONTRATADO")}</span>
-                    </div>
-                    <div>
-                      <span className="block text-slate-500 text-xs mb-1">Foro</span>
-                      <span className="font-medium text-slate-900">{c.foro ?? "—"}</span>
                     </div>
                     <div>
                       <span className="block text-slate-500 text-xs mb-1">Valor Global</span>
@@ -405,28 +408,12 @@ export function Contracts() {
                   )}
 
                   {c.status === "RASCUNHO" &&
-                    (c.itensConferemTotalTabela !== null || c.itensConferemValorContrato !== null) && (
-                      <div className="mb-4 text-xs text-slate-600 bg-white border border-slate-200 rounded-lg p-3">
-                        <p className="font-semibold text-slate-700 mb-1">Validações da extração</p>
-                        <p className="text-slate-600">
-                          Soma dos itens confere o total da tabela: {c.itensConferemTotalTabela ? "sim" : "não"}
-                        </p>
-                        <p className="text-slate-600">
-                          Soma dos itens confere o valor do contrato: {c.itensConferemValorContrato ? "sim" : "não"}
-                        </p>
+                    (c.avisos.length > 0 || revisaoPendente(c)) && (
+                      <div className="mb-4 flex items-center gap-2 bg-amber-50 border border-amber-200 text-amber-800 text-xs rounded-lg px-3 py-2">
+                        <AlertCircle className="w-4 h-4 shrink-0" />
+                        {MENSAGEM_DADOS_NAO_EXTRAIDOS}
                       </div>
                     )}
-
-                  {c.status === "RASCUNHO" && c.avisos.length > 0 && (
-                    <div className="mb-4 bg-amber-50 border border-amber-200 rounded-lg p-3">
-                      <p className="text-xs font-semibold text-amber-800 mb-1">Avisos do OCR</p>
-                      <ul className="text-xs text-amber-700 space-y-1">
-                        {c.avisos.map((a, i) => (
-                          <li key={i}>• {a}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
 
                   <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
                     <table className="min-w-full divide-y divide-slate-200 text-sm">

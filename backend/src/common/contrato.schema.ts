@@ -8,6 +8,11 @@ import { z } from "zod";
  * não existe. Os únicos campos operacionais fora da extração são `id`, `status`,
  * `arquivoPdf` e os saldos de item (`recebido`/`consumido`), que vivem no banco.
  *
+ * Escopo do contrato extraído: identificação, objeto/valor/vigência, partes
+ * (nome + documento), itens, dotações, avisos e validações. Bloco de assinatura,
+ * signatários, condições, fundamentação e foro ficaram fora — a data da assinatura
+ * é lida internamente no parsing apenas como fallback da vigência.
+ *
  * O arquivo `contrato.schema.test.ts` parseia o golden file do contrato real
  * (`parsing/src/services/__fixtures__/contrato_dv00014_2026.extracted.json`). Se o
  * extrator mudar de forma incompatível, o teste do backend quebra — é o contrato
@@ -18,39 +23,11 @@ const texto = z.string().nullable();
 const numero = z.number().nullable();
 
 export const PAPEIS_PARTE = ["CONTRATANTE", "CONTRATADO"] as const;
-export const PAPEIS_SIGNATARIO = ["CONTRATANTE", "CONTRATADO", "TESTEMUNHA"] as const;
-
-export const TipoDocumentoParteSchema = z.enum(["CNPJ", "CPF"]).nullable();
-
-/** Qualificação de uma pessoa física (representante legal ou signatário). */
-export const PessoaContratoSchema = z.object({
-  nome: texto,
-  cargo: texto,
-  cpf: texto,
-  rg: texto,
-  orgao_emissor_rg: texto,
-  nacionalidade: texto,
-  estado_civil: texto,
-  profissao: texto,
-  endereco: texto,
-});
 
 export const ParteContratoSchema = z.object({
   papel: z.enum(PAPEIS_PARTE),
   nome: texto,
   documento: texto,
-  tipo_documento: TipoDocumentoParteSchema,
-  endereco: texto,
-  representante: PessoaContratoSchema.nullable(),
-});
-
-export const SignatarioContratoSchema = PessoaContratoSchema.extend({
-  papel: z.enum(PAPEIS_SIGNATARIO),
-  cnpj: texto,
-  /** O nome foi confirmado no bloco de assinatura do PDF (não só na qualificação das partes). */
-  confirmado_no_bloco_de_assinatura: z.boolean(),
-  /** `false` quando o dado existe no documento mas o OCR não conseguiu lê-lo. */
-  legivel: z.boolean(),
 });
 
 export const ItemContratoSchema = z.object({
@@ -77,28 +54,6 @@ export const DotacaoContratoSchema = z.object({
   complemento: texto,
 });
 
-export const CondicoesContratoSchema = z.object({
-  prazo_execucao: z
-    .object({
-      quantidade: z.number().nonnegative(),
-      unidade: z.string(),
-      marco: texto,
-    })
-    .nullable(),
-  prazo_pagamento: z
-    .object({
-      quantidade: z.number().nonnegative(),
-      unidade: z.string(),
-    })
-    .nullable(),
-  reajuste: z
-    .object({
-      prazo: texto,
-      indice: texto,
-    })
-    .nullable(),
-});
-
 /** Payload devolvido por `POST /upload` do parsing em `structured_data.contrato`. */
 export const ContratoExtractionSchema = z.object({
   numero_contrato: texto,
@@ -108,28 +63,13 @@ export const ContratoExtractionSchema = z.object({
   objeto: texto,
   contratante: ParteContratoSchema,
   contratado: ParteContratoSchema,
-  signatarios: z.array(SignatarioContratoSchema),
-  assinatura: z.object({
-    local: texto,
-    data: texto, // ISO (yyyy-mm-dd)
-    assinatura_digital: z.object({
-      detectada: z.boolean(),
-      plataforma: texto,
-      assinante: texto,
-    }),
-  }),
   vigencia: z.object({
     data_inicio: texto,
     data_fim: texto,
-    data_fim_calculada: z.boolean(),
-    trecho: texto,
   }),
   valor_total: numero,
   itens: z.array(ItemContratoSchema),
   dotacoes: z.array(DotacaoContratoSchema),
-  condicoes: CondicoesContratoSchema,
-  fundamentacao_legal: z.array(z.string()),
-  foro: texto,
   validacoes: z.object({
     soma_itens_confere_total_da_tabela: z.boolean().nullable(),
     soma_itens_confere_valor_do_contrato: z.boolean().nullable(),
@@ -159,8 +99,6 @@ export type ContratoSetorInput = z.infer<typeof ContratoSetorInputSchema>;
 // O payload da revisão espelha o `GET /api/contratos/:id` (camelCase, nomes do
 // model Prisma), não o formato da extração. É a mesma forma que a barra lateral
 // de revisão já recebe na tela — evita conversão de snake_case no browser.
-// `condicoes` é a exceção: é um JSON preservado da extração, então continua
-// snake_case (prazo_execucao, prazo_pagamento, reajuste).
 
 const textoRevisao = z.string().nullable().optional();
 
@@ -177,36 +115,6 @@ export const ParteContratoRevisaoSchema = z.object({
   papel: z.enum(PAPEIS_PARTE),
   nome: textoRevisao,
   documento: textoRevisao,
-  tipoDocumento: TipoDocumentoParteSchema.optional(),
-  endereco: textoRevisao,
-  representanteNome: textoRevisao,
-  representanteCargo: textoRevisao,
-  representanteCpf: textoRevisao,
-  representanteRg: textoRevisao,
-  representanteOrgaoEmissorRg: textoRevisao,
-  representanteNacionalidade: textoRevisao,
-  representanteEstadoCivil: textoRevisao,
-  representanteProfissao: textoRevisao,
-  representanteEndereco: textoRevisao,
-});
-
-export const SignatarioContratoRevisaoSchema = z.object({
-  /** Presente quando o signatário já existe; a revisão substitui a lista inteira. */
-  id: z.number().int().positive().optional(),
-  papel: z.enum(PAPEIS_SIGNATARIO),
-  ordem: z.number().int().nonnegative().optional(),
-  nome: textoRevisao,
-  cargo: textoRevisao,
-  cpf: textoRevisao,
-  cnpj: textoRevisao,
-  rg: textoRevisao,
-  orgaoEmissorRg: textoRevisao,
-  nacionalidade: textoRevisao,
-  estadoCivil: textoRevisao,
-  profissao: textoRevisao,
-  endereco: textoRevisao,
-  confirmadoNoBloco: z.boolean().optional(),
-  legivel: z.boolean().optional(),
 });
 
 export const ItemContratoRevisaoSchema = z.object({
@@ -242,7 +150,8 @@ export const DotacaoContratoRevisaoSchema = z.object({
  *
  * Regras aplicadas no repository:
  * - só contratos `RASCUNHO` aceitam revisão (409 caso contrário);
- * - `confirmar` exige `numero` preenchido;
+ * - `confirmar` exige todos os campos essenciais preenchidos e a soma dos itens
+ *   conferindo com o valor total (409/400 caso contrário);
  * - `numero` duplicado responde 409 (`DUPLICATE_CONTRATO`);
  * - `avisos` e `dadosExtraidos` são histórico e nunca são apagados pela revisão.
  */
@@ -255,18 +164,7 @@ export const AtualizarContratoSchema = z.object({
   valorTotal: z.number().nonnegative().nullable().optional(),
   vigenciaInicio: dataRevisao,
   vigenciaFim: dataRevisao,
-  vigenciaFimCalculada: z.boolean().optional(),
-  vigenciaTrecho: textoRevisao,
-  foro: textoRevisao,
-  assinaturaLocal: textoRevisao,
-  assinaturaData: dataRevisao,
-  assinaturaDigital: z.boolean().optional(),
-  assinaturaPlataforma: textoRevisao,
-  assinaturaAssinante: textoRevisao,
-  fundamentacaoLegal: z.array(z.string()).optional(),
-  condicoes: CondicoesContratoSchema.nullable().optional(),
   partes: z.array(ParteContratoRevisaoSchema).optional(),
-  signatarios: z.array(SignatarioContratoRevisaoSchema).optional(),
   itens: z.array(ItemContratoRevisaoSchema).optional(),
   dotacoes: z.array(DotacaoContratoRevisaoSchema).optional(),
   setores: z.array(ContratoSetorInputSchema).optional(),
@@ -276,6 +174,5 @@ export const AtualizarContratoSchema = z.object({
 
 export type AtualizarContratoInput = z.infer<typeof AtualizarContratoSchema>;
 export type ParteContratoRevisao = z.infer<typeof ParteContratoRevisaoSchema>;
-export type SignatarioContratoRevisao = z.infer<typeof SignatarioContratoRevisaoSchema>;
 export type ItemContratoRevisao = z.infer<typeof ItemContratoRevisaoSchema>;
 export type DotacaoContratoRevisao = z.infer<typeof DotacaoContratoRevisaoSchema>;

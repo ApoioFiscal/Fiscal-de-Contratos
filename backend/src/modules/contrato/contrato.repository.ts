@@ -3,9 +3,13 @@ import { StatusContrato } from "@prisma/client";
 import { Prisma } from "@prisma/client";
 import { ContratoCreateData } from "./conversorContrato";
 import {
+  calcularConferenciaItens,
+  validarParaConfirmacao,
+  type EstadoFinalContrato,
+} from "./validacaoContrato";
+import {
   AtualizarContratoInput,
   ParteContratoRevisao,
-  SignatarioContratoRevisao,
   ItemContratoRevisao,
   DotacaoContratoRevisao,
 } from "../../common/contrato.schema";
@@ -18,7 +22,6 @@ import {
 
 const contratoInclude = {
   partes: true,
-  signatarios: { orderBy: { ordem: "asc" as const } },
   itens: { orderBy: { id: "asc" as const } },
   dotacoes: { orderBy: { id: "asc" as const } },
   setores: { include: { setor: true }, orderBy: { id: "asc" as const } },
@@ -29,34 +32,6 @@ const arredondar = (valor: number) => Math.round(valor * 100) / 100;
 const dadosParte = (parte: ParteContratoRevisao) => ({
   nome: parte.nome ?? null,
   documento: parte.documento ?? null,
-  tipoDocumento: parte.tipoDocumento ?? null,
-  endereco: parte.endereco ?? null,
-  representanteNome: parte.representanteNome ?? null,
-  representanteCargo: parte.representanteCargo ?? null,
-  representanteCpf: parte.representanteCpf ?? null,
-  representanteRg: parte.representanteRg ?? null,
-  representanteOrgaoEmissorRg: parte.representanteOrgaoEmissorRg ?? null,
-  representanteNacionalidade: parte.representanteNacionalidade ?? null,
-  representanteEstadoCivil: parte.representanteEstadoCivil ?? null,
-  representanteProfissao: parte.representanteProfissao ?? null,
-  representanteEndereco: parte.representanteEndereco ?? null,
-});
-
-const dadosSignatario = (signatario: SignatarioContratoRevisao, ordem: number) => ({
-  papel: signatario.papel,
-  ordem: signatario.ordem ?? ordem,
-  nome: signatario.nome ?? null,
-  cargo: signatario.cargo ?? null,
-  cpf: signatario.cpf ?? null,
-  cnpj: signatario.cnpj ?? null,
-  rg: signatario.rg ?? null,
-  orgaoEmissorRg: signatario.orgaoEmissorRg ?? null,
-  nacionalidade: signatario.nacionalidade ?? null,
-  estadoCivil: signatario.estadoCivil ?? null,
-  profissao: signatario.profissao ?? null,
-  endereco: signatario.endereco ?? null,
-  confirmadoNoBloco: signatario.confirmadoNoBloco ?? false,
-  legivel: signatario.legivel ?? true,
 });
 
 const dadosItem = (item: ItemContratoRevisao) => ({
@@ -81,7 +56,6 @@ const dadosDotacao = (dotacao: DotacaoContratoRevisao) => ({
   natureza: dotacao.natureza ?? null,
   complemento: dotacao.complemento ?? null,
 });
-
 
 export class ContratoRepository {
   async findAll() {
@@ -119,11 +93,11 @@ export class ContratoRepository {
       await tx.contratoSetor.deleteMany({ where: { idContrato: id } });
       await tx.contratoDotacao.deleteMany({ where: { idContrato: id } });
       await tx.contratoItem.deleteMany({ where: { idContrato: id } });
-      await tx.contratoSignatario.deleteMany({ where: { idContrato: id } });
       await tx.contratoParte.deleteMany({ where: { idContrato: id } });
       await tx.contrato.delete({ where: { id } });
     });
   }
+
   async findByNumero(numero: string) {
     return prisma.contrato.findUnique({ where: { numero } });
   }
@@ -190,7 +164,25 @@ export class ContratoRepository {
   async atualizar(id: number, input: AtualizarContratoInput) {
     const atual = await prisma.contrato.findUnique({
       where: { id },
-      select: { id: true, status: true, numero: true, valorTotal: true },
+      select: {
+        id: true,
+        status: true,
+        numero: true,
+        valorTotal: true,
+        vigenciaInicio: true,
+        vigenciaFim: true,
+        partes: { select: { papel: true, nome: true, documento: true } },
+        itens: {
+          select: {
+            descricao: true,
+            unidade: true,
+            quantidade: true,
+            valorUnitario: true,
+            valorTotal: true,
+          },
+        },
+        dotacoes: { select: { unidadeCodigo: true, unidade: true } },
+      },
     });
 
     if (!atual) {
@@ -203,10 +195,74 @@ export class ContratoRepository {
       throw new ContratoNaoEditavelError();
     }
 
+    // Estado final = o que está no banco com os campos enviados sobrescritos.
     const numeroFinal = (input.numero ?? atual.numero ?? "").trim();
+    const valorTotalFinal = input.valorTotal !== undefined ? input.valorTotal : atual.valorTotal;
+    const vigenciaInicioFinal =
+      input.vigenciaInicio !== undefined
+        ? input.vigenciaInicio
+          ? new Date(input.vigenciaInicio)
+          : null
+        : atual.vigenciaInicio;
+    const vigenciaFimFinal =
+      input.vigenciaFim !== undefined
+        ? input.vigenciaFim
+          ? new Date(input.vigenciaFim)
+          : null
+        : atual.vigenciaFim;
 
-    if (input.confirmar && !numeroFinal) {
-      throw new ValidationError("Informe o número do contrato antes de confirmar a revisão.");
+    const partesFinal: EstadoFinalContrato["partes"] = atual.partes.map((parte) => ({ ...parte }));
+    for (const parte of input.partes ?? []) {
+      const valor = {
+        papel: parte.papel,
+        nome: parte.nome ?? null,
+        documento: parte.documento ?? null,
+      };
+      const indice = partesFinal.findIndex((p) => p.papel === parte.papel);
+      if (indice >= 0) partesFinal[indice] = valor;
+      else partesFinal.push(valor);
+    }
+
+    // `valorTotal` em branco é pendência, não é inferido: a tela destaca o campo
+    // e a confirmação é bloqueada. O cálculo automático continua apenas na
+    // persistência (`dadosItem`), para não perder um rascunho salvo no meio da revisão.
+    const itensFinal: EstadoFinalContrato["itens"] = input.itens
+      ? input.itens.map((item) => ({
+          descricao: item.descricao,
+          unidade: item.unidade,
+          quantidade: item.quantidade,
+          valorUnitario: item.valorUnitario,
+          valorTotal: item.valorTotal ?? null,
+        }))
+      : atual.itens.map((item) => ({
+          descricao: item.descricao,
+          unidade: item.unidade,
+          quantidade: item.quantidade,
+          valorUnitario: item.valorUnitario,
+          valorTotal: item.valorTotal,
+        }));
+
+    const dotacoesFinal: EstadoFinalContrato["dotacoes"] = (input.dotacoes ?? atual.dotacoes).map((dotacao) => ({
+      unidadeCodigo: dotacao.unidadeCodigo,
+      unidade: dotacao.unidade,
+    }));
+
+    const estadoFinal: EstadoFinalContrato = {
+      numero: numeroFinal,
+      valorTotal: valorTotalFinal,
+      vigenciaInicio: vigenciaInicioFinal,
+      vigenciaFim: vigenciaFimFinal,
+      partes: partesFinal,
+      itens: itensFinal,
+      dotacoes: dotacoesFinal,
+    };
+
+    // Recalcula a conferência dos itens com o valor do contrato revisado.
+    // `itensConferemTotalTabela` continua sendo o registro histórico do PDF.
+    const itensConferem = calcularConferenciaItens(itensFinal, valorTotalFinal);
+
+    if (input.confirmar) {
+      validarParaConfirmacao(estadoFinal);
     }
 
     if (input.numero !== undefined && input.numero !== atual.numero) {
@@ -225,47 +281,9 @@ export class ContratoRepository {
     if (input.numeroModalidade !== undefined) data.numeroModalidade = input.numeroModalidade;
     if (input.objeto !== undefined) data.objeto = input.objeto;
     if (input.valorTotal !== undefined) data.valorTotal = input.valorTotal;
-    if (input.vigenciaInicio !== undefined) {
-      data.vigenciaInicio = input.vigenciaInicio ? new Date(input.vigenciaInicio) : null;
-    }
-    if (input.vigenciaFim !== undefined) {
-      data.vigenciaFim = input.vigenciaFim ? new Date(input.vigenciaFim) : null;
-    }
-    if (input.vigenciaFimCalculada !== undefined) {
-      data.vigenciaFimCalculada = input.vigenciaFimCalculada;
-    }
-    if (input.vigenciaTrecho !== undefined) data.vigenciaTrecho = input.vigenciaTrecho;
-    if (input.foro !== undefined) data.foro = input.foro;
-    if (input.fundamentacaoLegal !== undefined) data.fundamentacaoLegal = input.fundamentacaoLegal;
-    if (input.condicoes !== undefined) {
-      data.condicoes =
-        input.condicoes === null
-          ? Prisma.DbNull
-          : (input.condicoes as Prisma.InputJsonValue);
-    }
-    if (input.assinaturaLocal !== undefined) data.assinaturaLocal = input.assinaturaLocal;
-    if (input.assinaturaData !== undefined) {
-      data.assinaturaData = input.assinaturaData ? new Date(input.assinaturaData) : null;
-    }
-    if (input.assinaturaDigital !== undefined) data.assinaturaDigital = input.assinaturaDigital;
-    if (input.assinaturaPlataforma !== undefined) {
-      data.assinaturaPlataforma = input.assinaturaPlataforma;
-    }
-    if (input.assinaturaAssinante !== undefined) {
-      data.assinaturaAssinante = input.assinaturaAssinante;
-    }
-
-    // Recalcula a conferência dos itens com o valor do contrato revisado.
-    // `itensConferemTotalTabela` continua sendo o registro histórico do PDF.
-    if (input.itens !== undefined) {
-      const somaItens = input.itens.reduce(
-        (acc, item) => acc + (item.valorTotal ?? arredondar(item.quantidade * item.valorUnitario)),
-        0,
-      );
-      const valorContrato = input.valorTotal !== undefined ? input.valorTotal : atual.valorTotal;
-      data.itensConferemValorContrato =
-        valorContrato == null ? null : Math.abs(somaItens - valorContrato) <= 0.01;
-    }
+    if (input.vigenciaInicio !== undefined) data.vigenciaInicio = vigenciaInicioFinal;
+    if (input.vigenciaFim !== undefined) data.vigenciaFim = vigenciaFimFinal;
+    data.itensConferemValorContrato = itensConferem;
 
     // `confirmar: true` na revisão promove RASCUNHO → ATIVA.
     if (input.confirmar) {
@@ -287,20 +305,7 @@ export class ContratoRepository {
           }
         }
 
-        // Signatários: a revisão envia a lista completa, então substitui.
-        if (input.signatarios !== undefined) {
-          await tx.contratoSignatario.deleteMany({ where: { idContrato: id } });
-          if (input.signatarios.length > 0) {
-            await tx.contratoSignatario.createMany({
-              data: input.signatarios.map((signatario, ordem) => ({
-                idContrato: id,
-                ...dadosSignatario(signatario, ordem),
-              })),
-            });
-          }
-        }
-
-        // Dotações: mesma lógica dos signatários (lista completa).
+        // Dotações: a revisão envia a lista completa, então substitui.
         if (input.dotacoes !== undefined) {
           await tx.contratoDotacao.deleteMany({ where: { idContrato: id } });
           if (input.dotacoes.length > 0) {

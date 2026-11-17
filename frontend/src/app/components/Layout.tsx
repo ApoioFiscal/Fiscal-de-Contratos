@@ -1,5 +1,5 @@
 import { Outlet, NavLink, useNavigate, useLocation } from "react-router";
-import { LayoutDashboard, FileText, ShoppingCart, Star, RefreshCcw, Users, LogOut, ArrowLeft } from "lucide-react";
+import { LayoutDashboard, FileText, ShoppingCart, Star, RefreshCcw, Users, LogOut, ArrowLeft, Package } from "lucide-react";
 
 import { encerrarSessao, obterSessao } from "@/services/auth";
 import type { PerfilAcesso } from "@/types/auth";
@@ -32,7 +32,9 @@ const navItemsPorPerfil: Record<PerfilAcesso, NavItem[]> = {
     { to: "/", icon: LayoutDashboard, label: "Dashboard" },
     { to: "/contratos", icon: FileText, label: "Contratos" },
     { to: "/pedidos", icon: ShoppingCart, label: "Pedidos e Ordens" },
+    { to: "/estoque", icon: Package, label: "Estoque" },
     { to: "/avaliacoes", icon: Star, label: "Avaliacoes" },
+    { to: "/renovacoes", icon: RefreshCcw, label: "Renovacoes" },
   ],
   secretaria: [
     { to: "/", icon: LayoutDashboard, label: "Dashboard" },
@@ -43,7 +45,9 @@ const navItemsPorPerfil: Record<PerfilAcesso, NavItem[]> = {
     { to: "/", icon: LayoutDashboard, label: "Dashboard" },
     { to: "/contratos", icon: FileText, label: "Contratos" },
     { to: "/pedidos", icon: ShoppingCart, label: "Pedidos e Ordens" },
+    { to: "/estoque", icon: Package, label: "Estoque" },
     { to: "/avaliacoes", icon: Star, label: "Avaliacoes" },
+    { to: "/renovacoes", icon: RefreshCcw, label: "Renovacoes" },
   ],
 };
 

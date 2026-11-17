@@ -39,54 +39,10 @@ export interface Setor {
 
 export type PapelParte = "CONTRATANTE" | "CONTRATADO";
 
-export type PapelSignatario = "CONTRATANTE" | "CONTRATADO" | "TESTEMUNHA";
-
-export type TipoDocumento = "CNPJ" | "CPF";
-
-export interface PessoaContrato {
-  nome: string | null;
-  cargo: string | null;
-  cpf: string | null;
-  rg: string | null;
-  orgaoEmissorRg: string | null;
-  nacionalidade: string | null;
-  estadoCivil: string | null;
-  profissao: string | null;
-  endereco: string | null;
-}
-
 export interface ContratoParte {
   papel: PapelParte;
   nome: string | null;
   documento: string | null;
-  tipoDocumento: TipoDocumento | null;
-  endereco: string | null;
-  representanteNome: string | null;
-  representanteCargo: string | null;
-  representanteCpf: string | null;
-  representanteRg: string | null;
-  representanteOrgaoEmissorRg: string | null;
-  representanteNacionalidade: string | null;
-  representanteEstadoCivil: string | null;
-  representanteProfissao: string | null;
-  representanteEndereco: string | null;
-}
-
-export interface ContratoSignatario {
-  papel: PapelSignatario;
-  ordem: number;
-  nome: string | null;
-  cargo: string | null;
-  cpf: string | null;
-  cnpj: string | null;
-  rg: string | null;
-  orgaoEmissorRg: string | null;
-  nacionalidade: string | null;
-  estadoCivil: string | null;
-  profissao: string | null;
-  endereco: string | null;
-  confirmadoNoBloco: boolean;
-  legivel: boolean;
 }
 
 export interface ContratoItem {
@@ -135,17 +91,7 @@ export interface Contrato {
   valorTotal: number | null;
   vigenciaInicio: string | null;
   vigenciaFim: string | null;
-  vigenciaFimCalculada: boolean;
-  vigenciaTrecho: string | null;
-  foro: string | null;
   status: StatusContrato;
-  assinaturaLocal: string | null;
-  assinaturaData: string | null;
-  assinaturaDigital: boolean;
-  assinaturaPlataforma: string | null;
-  assinaturaAssinante: string | null;
-  fundamentacaoLegal: string[];
-  condicoes: ContratoCondicoes | null;
   itensConferemTotalTabela: boolean | null;
   itensConferemValorContrato: boolean | null;
   avisos: string[];
@@ -156,16 +102,9 @@ export interface Contrato {
   extraidoEm: string;
   atualizadoEm: string;
   partes: ContratoParte[];
-  signatarios: ContratoSignatario[];
   itens: ContratoItem[];
   dotacoes: ContratoDotacao[];
   setores: ContratoSetor[];
-}
-
-export interface ContratoCondicoes {
-  prazo_execucao: { quantidade: number; unidade: string; marco: string | null } | null;
-  prazo_pagamento: { quantidade: number; unidade: string } | null;
-  reajuste: { prazo: string | null; indice: string | null } | null;
 }
 
 // ---------- Pedidos / estoque / avaliações / termos ----------

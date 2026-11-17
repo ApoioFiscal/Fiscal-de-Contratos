@@ -25,7 +25,7 @@ const GOLDEN = path.join(
   "contrato_dv00014_2026.extracted.json",
 );
 
-test("golden do contrato real existe (monorepo)" , () => {
+test("golden do contrato real existe (monorepo)", () => {
   assert.ok(
     existsSync(GOLDEN),
     `Golden file não encontrado em ${GOLDEN}. O teste exige o repositório completo (backend + parsing).`,
@@ -38,6 +38,19 @@ test("schema aceita a extração do contrato real sem alterar nenhum campo", () 
 
   // `parse` não pode descartar nada silenciosamente.
   assert.deepEqual(parsed, raw);
+
+  // Escopo reduzido: nada de assinatura/signatários/condições/foro.
+  for (const campo of [
+    "assinatura",
+    "signatarios",
+    "condicoes",
+    "fundamentacao_legal",
+    "foro",
+  ]) {
+    assert.ok(!(campo in parsed), `O campo ${campo} não deve mais existir na extração`);
+  }
+  assert.ok(!("data_fim_calculada" in parsed.vigencia));
+  assert.ok(!("trecho" in parsed.vigencia));
 });
 
 test("contrato real: dados que a tela de revisão usa estão presentes", () => {
@@ -47,11 +60,12 @@ test("contrato real: dados que a tela de revisão usa estão presentes", () => {
 
   assert.equal(contrato.numero_contrato, "00141/2026-SDC");
   assert.equal(contrato.numero_processo, "260803DV00014");
+  assert.equal(contrato.contratante.nome, "Prefeitura Municipal de Marizópolis");
   assert.equal(contrato.contratante.documento, "01.612.941/0001-49");
   assert.equal(contrato.contratado.nome, "RENATA RODRIGUES LOURENCO DE ALMEIDA");
   assert.equal(contrato.contratado.documento, "35.848.636/0001-72");
+  assert.equal(contrato.vigencia.data_inicio, "2026-08-19");
   assert.equal(contrato.vigencia.data_fim, "2026-12-31");
-  assert.equal(contrato.assinatura.data, "2026-08-19");
   assert.equal(contrato.valor_total, 37135);
 
   // 4 secretarias beneficiárias vêm das dotações.
@@ -67,35 +81,31 @@ test("contrato real: dados que a tela de revisão usa estão presentes", () => {
 
   // Quantidade fracionária (m²) precisa sobreviver como número, não ser truncada.
   assert.equal(contrato.itens[0].quantidade, 50);
-
-  // O que não foi lido com segurança fica null e vem acompanhado de aviso.
-  assert.equal(contrato.signatarios[2].nome, null);
-  assert.equal(contrato.signatarios[2].legivel, false);
-  assert.ok(contrato.avisos.length >= 3);
+  assert.ok(contrato.avisos.length >= 2);
 });
 
-test("mapeamento para o Prisma usa camelCase nos signatários", () => {
+test("mapeamento para o Prisma usa só nome/documento nas partes", () => {
   const contrato = ContratoExtractionSchema.parse(
     JSON.parse(readFileSync(GOLDEN, "utf8")),
   );
 
   const data = mapearParaCriar(contrato);
-  const signatarios = data.signatarios.create;
 
-  assert.ok(signatarios.length > 0);
-  for (const signatario of signatarios) {
-    // Prisma rejeita `orgao_emissor_rg`/`estado_civil`/`confirmado_no_bloco_de_assinatura`;
-    // esses campos precisam chegar como camelCase, senão o create quebra em runtime.
-    assert.ok(!("orgao_emissor_rg" in signatario));
-    assert.ok(!("estado_civil" in signatario));
-    assert.ok(!("confirmado_no_bloco_de_assinatura" in signatario));
-    assert.ok("orgaoEmissorRg" in signatario);
-    assert.ok("estadoCivil" in signatario);
-    assert.ok("confirmadoNoBloco" in signatario);
-  }
-
-  assert.equal(signatarios[0].orgaoEmissorRg, "SSP/PB");
-  assert.equal(signatarios[1].confirmadoNoBloco, true);
+  assert.deepEqual(data.partes.create, [
+    {
+      papel: "CONTRATANTE",
+      nome: "Prefeitura Municipal de Marizópolis",
+      documento: "01.612.941/0001-49",
+    },
+    {
+      papel: "CONTRATADO",
+      nome: "RENATA RODRIGUES LOURENCO DE ALMEIDA",
+      documento: "35.848.636/0001-72",
+    },
+  ]);
+  assert.equal(data.itens.create.length, 5);
+  assert.equal(data.dotacoes.create.length, 4);
+  assert.ok(!("signatarios" in data));
 });
 
 test("schema rejeita contrato sem as partes (não inventa dados)", () => {
@@ -105,24 +115,13 @@ test("schema rejeita contrato sem as partes (não inventa dados)", () => {
     modalidade: null,
     numero_modalidade: null,
     objeto: null,
-    signatarios: [],
-    assinatura: {
-      local: null,
-      data: null,
-      assinatura_digital: { detectada: false, plataforma: null, assinante: null },
-    },
     vigencia: {
       data_inicio: null,
       data_fim: null,
-      data_fim_calculada: false,
-      trecho: null,
     },
     valor_total: null,
     itens: [],
     dotacoes: [],
-    condicoes: { prazo_execucao: null, prazo_pagamento: null, reajuste: null },
-    fundamentacao_legal: [],
-    foro: null,
     validacoes: {
       soma_itens_confere_total_da_tabela: null,
       soma_itens_confere_valor_do_contrato: null,
@@ -141,30 +140,11 @@ test("revisão aceita o payload camelCase devolvido pelo GET, com coleções", (
     valorTotal: 37135,
     vigenciaInicio: "2026-08-19",
     vigenciaFim: "2026-12-31",
-    assinaturaData: "2026-08-19T00:00:00.000Z",
-    assinaturaDigital: false,
-    fundamentacaoLegal: ["Lei Federal nº 14.133/2021"],
-    condicoes: {
-      prazo_execucao: { quantidade: 15, unidade: "dias úteis", marco: "Ordem de Fornecimento" },
-      prazo_pagamento: { quantidade: 30, unidade: "dias corridos" },
-      reajuste: { prazo: "um ano", indice: "IPCA" },
-    },
     partes: [
       {
         papel: "CONTRATANTE",
         nome: "Prefeitura Municipal de Marizópolis",
         documento: "01.612.941/0001-49",
-        tipoDocumento: "CNPJ",
-        representanteNome: "Prefeito",
-      },
-    ],
-    signatarios: [
-      {
-        papel: "TESTEMUNHA",
-        ordem: 2,
-        nome: "Maria Testemunha",
-        confirmadoNoBloco: false,
-        legivel: true,
       },
     ],
     itens: [
@@ -191,12 +171,13 @@ test("revisão aceita o payload camelCase devolvido pelo GET, com coleções", (
   assert.equal(parsed.numero, "00141/2026-SDC");
   assert.equal(parsed.itens?.length, 1);
   assert.equal(parsed.itens?.[0].id, 1);
-  assert.equal(parsed.partes?.[0].tipoDocumento, "CNPJ");
-  assert.equal(parsed.signatarios?.[0].confirmadoNoBloco, false);
-  assert.equal(parsed.condicoes?.prazo_execucao?.quantidade, 15);
+  assert.equal(parsed.partes?.[0].nome, "Prefeitura Municipal de Marizópolis");
+  assert.equal(parsed.dotacoes?.[0].unidadeCodigo, "02");
 
-  // `condicoes` pode ser limpo na revisão.
-  assert.doesNotThrow(() => AtualizarContratoSchema.parse({ condicoes: null }));
+  // Campos fora do escopo são ignorados silenciosamente pelo Zod (strictamente,
+  // não são esperados no payload da nova tela de revisão).
+  assert.ok(!("signatarios" in parsed));
+  assert.ok(!("condicoes" in parsed));
 });
 
 test("revisão rejeita item sem descrição e data fora do formato", () => {
@@ -208,4 +189,3 @@ test("revisão rejeita item sem descrição e data fora do formato", () => {
 
   assert.throws(() => AtualizarContratoSchema.parse({ vigenciaInicio: "31/12/2026" }));
 });
-

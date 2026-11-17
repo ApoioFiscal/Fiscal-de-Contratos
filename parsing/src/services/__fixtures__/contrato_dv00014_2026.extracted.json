@@ -7,105 +7,16 @@
   "contratante": {
     "papel": "CONTRATANTE",
     "nome": "Prefeitura Municipal de Marizópolis",
-    "documento": "01.612.941/0001-49",
-    "tipo_documento": "CNPJ",
-    "endereco": "Rua João Vicente de Almeida, SN - Edilson Alves - Marizopolis - PB",
-    "representante": {
-      "nome": "Lucas Gonçalves Braga",
-      "cargo": "Prefeito",
-      "cpf": "009.910.544-66",
-      "rg": "2631985",
-      "orgao_emissor_rg": "SSP/PB",
-      "nacionalidade": "Brasileiro",
-      "estado_civil": "Casado",
-      "profissao": "Arquiteto",
-      "endereco": "Rua João Vicente de Almeida, SN - Edilson Alves Silva - Marizopolis - PB"
-    }
+    "documento": "01.612.941/0001-49"
   },
   "contratado": {
     "papel": "CONTRATADO",
     "nome": "RENATA RODRIGUES LOURENCO DE ALMEIDA",
-    "documento": "35.848.636/0001-72",
-    "tipo_documento": "CNPJ",
-    "endereco": "RUA OTAVIO MARIZ, 41 - CENTRO - MARIZOPOLIS - PB",
-    "representante": null
-  },
-  "signatarios": [
-    {
-      "papel": "CONTRATANTE",
-      "nome": "Lucas Gonçalves Braga",
-      "cargo": "Prefeito",
-      "cpf": "009.910.544-66",
-      "cnpj": null,
-      "rg": "2631985",
-      "orgao_emissor_rg": "SSP/PB",
-      "nacionalidade": "Brasileiro",
-      "estado_civil": "Casado",
-      "profissao": "Arquiteto",
-      "endereco": "Rua João Vicente de Almeida, SN - Edilson Alves Silva - Marizopolis - PB",
-      "confirmado_no_bloco_de_assinatura": false,
-      "legivel": true
-    },
-    {
-      "papel": "CONTRATADO",
-      "nome": "RENATA RODRIGUES LOURENCO DE ALMEIDA",
-      "cargo": null,
-      "cpf": null,
-      "cnpj": "35.848.636/0001-72",
-      "rg": null,
-      "orgao_emissor_rg": null,
-      "nacionalidade": null,
-      "estado_civil": null,
-      "profissao": null,
-      "endereco": "RUA OTAVIO MARIZ, 41 - CENTRO - MARIZOPOLIS - PB",
-      "confirmado_no_bloco_de_assinatura": true,
-      "legivel": true
-    },
-    {
-      "papel": "TESTEMUNHA",
-      "nome": null,
-      "cargo": null,
-      "cpf": null,
-      "cnpj": null,
-      "rg": null,
-      "orgao_emissor_rg": null,
-      "nacionalidade": null,
-      "estado_civil": null,
-      "profissao": null,
-      "endereco": null,
-      "confirmado_no_bloco_de_assinatura": false,
-      "legivel": false
-    },
-    {
-      "papel": "TESTEMUNHA",
-      "nome": null,
-      "cargo": null,
-      "cpf": null,
-      "cnpj": null,
-      "rg": null,
-      "orgao_emissor_rg": null,
-      "nacionalidade": null,
-      "estado_civil": null,
-      "profissao": null,
-      "endereco": null,
-      "confirmado_no_bloco_de_assinatura": false,
-      "legivel": false
-    }
-  ],
-  "assinatura": {
-    "local": "Marizópolis - PB",
-    "data": "2026-08-19",
-    "assinatura_digital": {
-      "detectada": true,
-      "plataforma": "gov.br",
-      "assinante": "RENATA RODRIGUES LOURENCO DE ALMEIDA"
-    }
+    "documento": "35.848.636/0001-72"
   },
   "vigencia": {
     "data_inicio": "2026-08-19",
-    "data_fim": "2026-12-31",
-    "data_fim_calculada": false,
-    "trecho": "vigência do presente contrato será determinada: até 31 de dezembro de 2026, considerada da data de sua assinatura"
+    "data_fim": "2026-12-31"
   },
   "valor_total": 37135,
   "itens": [
@@ -205,34 +116,12 @@
       "complemento": "Objetivo: PROGRAMA IGD/SUAS 16600000 Transferência de Recursos do Fundo Nacional de Assistência Social - FNAS APLICAÇÕES DIRETAS"
     }
   ],
-  "condicoes": {
-    "prazo_execucao": {
-      "quantidade": 15,
-      "unidade": "dias úteis",
-      "marco": "Ordem de Fornecimento"
-    },
-    "prazo_pagamento": {
-      "quantidade": 30,
-      "unidade": "dias corridos"
-    },
-    "reajuste": {
-      "prazo": "um ano",
-      "indice": "IPCA"
-    }
-  },
-  "fundamentacao_legal": [
-    "Lei Federal nº 14.133/2021",
-    "Lei Complementar nº 123/2006"
-  ],
-  "foro": "Sousa",
   "validacoes": {
     "soma_itens_confere_total_da_tabela": true,
     "soma_itens_confere_valor_do_contrato": true
   },
   "avisos": [
     "3 item(ns) tiveram valor, unidade ou descrição ajustados por conflito de OCR: confira com o PDF.",
-    "O objeto contém trecho com ruído de OCR (pontuação solta): revise o texto.",
-    "Bloco de assinatura do contratante ilegível no OCR: os dados do signatário foram tirados da qualificação das partes. Confira a assinatura no PDF.",
-    "2 testemunha(s) não puderam ser lidas (assinatura/identificação manuscrita): preencha manualmente."
+    "O objeto contém trecho com ruído de OCR (pontuação solta): revise o texto."
   ]
 }

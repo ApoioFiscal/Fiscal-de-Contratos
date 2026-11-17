@@ -1075,7 +1075,7 @@ function NovoPedidoModal({
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-end" role="dialog" aria-label="Novo Pedido">
-      <div className="w-full max-w-2xl bg-white flex flex-col shadow-2xl animate-in slide-in-from-right duration-300">
+      <div className="w-full max-w-2xl h-full bg-white flex flex-col shadow-2xl animate-in slide-in-from-right duration-300">
         <div className="flex items-center justify-between px-8 py-5 border-b border-slate-200">
           <div>
             <h2 className="text-lg font-bold text-slate-900">Novo Pedido</h2>

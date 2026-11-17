@@ -85,8 +85,10 @@ export const buildStructuredData = (input: StructuredDataInput): StructuredDataR
     structuredData.tipo_documento = 'contrato';
     structuredData.contrato = contrato;
 
-    const dataAssinaturaBr = contrato.assinatura.data
-      ? contrato.assinatura.data.split('-').reverse().join('/')
+    // A data de início da vigência é o mais próximo que temos da data do documento
+    // (o bloco de assinatura é lido internamente só como fallback da vigência).
+    const dataDocumentoBr = contrato.vigencia.data_inicio
+      ? contrato.vigencia.data_inicio.split('-').reverse().join('/')
       : null;
 
     // Campos de topo usados por consumidores genéricos (ex.: tela de importação de
@@ -98,12 +100,11 @@ export const buildStructuredData = (input: StructuredDataInput): StructuredDataR
       objeto: contrato.objeto,
       orgao: contrato.contratante.nome,
       cliente: contrato.contratante.nome,
-      cnpj_orgao: contrato.contratante.tipo_documento === 'CNPJ' ? contrato.contratante.documento : null,
-      responsavel: contrato.contratante.representante?.nome,
-      data_documento: dataAssinaturaBr,
+      cnpj_orgao: contrato.contratante.documento,
+      data_documento: dataDocumentoBr,
       fornecedor: contrato.contratado.nome,
       nome_fornecedor: contrato.contratado.nome,
-      cnpj_fornecedor: contrato.contratado.tipo_documento === 'CNPJ' ? contrato.contratado.documento : null,
+      cnpj_fornecedor: contrato.contratado.documento,
       documento_fornecedor: contrato.contratado.documento,
     };
     for (const [key, value] of Object.entries(overrides)) {
@@ -123,8 +124,8 @@ export const buildStructuredData = (input: StructuredDataInput): StructuredDataR
         (a, b) => soDigitos(a) === soDigitos(b),
       );
     }
-    if (dataAssinaturaBr) {
-      structuredData.datas = priorizar(asStringArray(structuredData.datas), dataAssinaturaBr, (a, b) => a === b);
+    if (dataDocumentoBr) {
+      structuredData.datas = priorizar(asStringArray(structuredData.datas), dataDocumentoBr, (a, b) => a === b);
     }
 
     extractionSummary = buildContratoSummary(contrato);

@@ -30,24 +30,11 @@ test('contrato real: identificação, modalidade e objeto', () => {
   assert.match(c.objeto ?? '', /INDICADOS PELA ADMINISTRAÇÃO\.$/);
 });
 
-test('contrato real: contratante (prefeitura) e seu representante', () => {
+test('contrato real: contratante (prefeitura) vem do OCR', () => {
   const { contratante } = extractContrato(OCR_FIXTURE);
 
   assert.equal(contratante.nome, 'Prefeitura Municipal de Marizópolis');
   assert.equal(contratante.documento, '01.612.941/0001-49');
-  assert.equal(contratante.tipo_documento, 'CNPJ');
-  assert.equal(contratante.endereco, 'Rua João Vicente de Almeida, SN - Edilson Alves - Marizopolis - PB');
-
-  const rep = contratante.representante;
-  assert.ok(rep);
-  assert.equal(rep.nome, 'Lucas Gonçalves Braga');
-  assert.equal(rep.cargo, 'Prefeito');
-  assert.equal(rep.cpf, '009.910.544-66');
-  assert.equal(rep.rg, '2631985');
-  assert.equal(rep.orgao_emissor_rg, 'SSP/PB');
-  assert.equal(rep.nacionalidade, 'Brasileiro');
-  assert.equal(rep.estado_civil, 'Casado');
-  assert.equal(rep.profissao, 'Arquiteto');
 });
 
 test('contrato real: contratado é o CNPJ da empresa, não o da prefeitura', () => {
@@ -55,10 +42,6 @@ test('contrato real: contratado é o CNPJ da empresa, não o da prefeitura', () 
 
   assert.equal(contratado.nome, 'RENATA RODRIGUES LOURENCO DE ALMEIDA');
   assert.equal(contratado.documento, '35.848.636/0001-72');
-  assert.equal(contratado.tipo_documento, 'CNPJ');
-  // "MAR1ZOPOLIS" (OCR) deve voltar a ser "MARIZOPOLIS"
-  assert.equal(contratado.endereco, 'RUA OTAVIO MARIZ, 41 - CENTRO - MARIZOPOLIS - PB');
-  assert.equal(contratado.representante, null);
 });
 
 test('contrato real: itens reconciliados contra ruído de OCR', () => {
@@ -93,51 +76,14 @@ test('contrato real: valor total e validações de soma', () => {
   assert.equal(c.validacoes.soma_itens_confere_valor_do_contrato, true);
 });
 
-test('contrato real: vigência, assinatura e assinatura digital', () => {
+test('contrato real: vigência (data da assinatura usada só como fallback)', () => {
   const c = extractContrato(OCR_FIXTURE);
 
   assert.equal(c.vigencia.data_inicio, '2026-08-19');
   assert.equal(c.vigencia.data_fim, '2026-12-31');
-  assert.equal(c.vigencia.data_fim_calculada, false);
-
-  assert.equal(c.assinatura.local, 'Marizópolis - PB');
-  // o carimbo gov.br saiu como "19/08/2076" no OCR: a data vem do texto por extenso
-  assert.equal(c.assinatura.data, '2026-08-19');
-  assert.deepEqual(c.assinatura.assinatura_digital, {
-    detectada: true,
-    plataforma: 'gov.br',
-    assinante: 'RENATA RODRIGUES LOURENCO DE ALMEIDA',
-  });
 });
 
-test('contrato real: signatários — nunca inventa o que o OCR não leu', () => {
-  const c = extractContrato(OCR_FIXTURE);
-  const porPapel = (papel: string) => c.signatarios.filter((s) => s.papel === papel);
-
-  const [contratante] = porPapel('CONTRATANTE');
-  assert.equal(contratante.nome, 'Lucas Gonçalves Braga');
-  assert.equal(contratante.cpf, '009.910.544-66');
-  assert.equal(contratante.confirmado_no_bloco_de_assinatura, false); // bloco ilegível no OCR
-
-  const [contratado] = porPapel('CONTRATADO');
-  assert.equal(contratado.nome, 'RENATA RODRIGUES LOURENCO DE ALMEIDA');
-  assert.equal(contratado.cnpj, '35.848.636/0001-72');
-  assert.equal(contratado.confirmado_no_bloco_de_assinatura, true);
-
-  // testemunhas são manuscritas: 2 esperadas, 0 legíveis, sem nome/CPF inventado
-  const testemunhas = porPapel('TESTEMUNHA');
-  assert.equal(testemunhas.length, 2);
-  for (const t of testemunhas) {
-    assert.equal(t.legivel, false);
-    assert.equal(t.nome, null);
-    assert.equal(t.cpf, null);
-  }
-
-  assert.ok(c.avisos.some((a) => /testemunha/i.test(a)));
-  assert.ok(c.avisos.some((a) => /assinatura do contratante/i.test(a)));
-});
-
-test('contrato real: dotações, condições, fundamentação e foro', () => {
+test('contrato real: dotações', () => {
   const c = extractContrato(OCR_FIXTURE);
 
   assert.deepEqual(
@@ -153,14 +99,6 @@ test('contrato real: dotações, condições, fundamentação e foro', () => {
   assert.equal(c.dotacoes[0].ficha, '000021');
   assert.equal(c.dotacoes[0].natureza_codigo, '3390.39');
   assert.match(c.dotacoes[3].complemento ?? '', /FNAS APLICAÇÕES DIRETAS$/);
-
-  assert.deepEqual(c.condicoes.prazo_execucao, { quantidade: 15, unidade: 'dias úteis', marco: 'Ordem de Fornecimento' });
-  assert.deepEqual(c.condicoes.prazo_pagamento, { quantidade: 30, unidade: 'dias corridos' });
-  assert.deepEqual(c.condicoes.reajuste, { prazo: 'um ano', indice: 'IPCA' });
-
-  // só as leis da cláusula de fundamentos — a LGPD (cláusula 14) não entra
-  assert.deepEqual(c.fundamentacao_legal, ['Lei Federal nº 14.133/2021', 'Lei Complementar nº 123/2006']);
-  assert.equal(c.foro, 'Sousa');
 });
 
 test('contrato real: o documento é classificado como contrato (e não "licitacao")', () => {
@@ -215,21 +153,8 @@ PELO CONTRATADO
 MARIA SOUZA
 `;
 
-// O contratante é fixo (a prefeitura) e vem da configuração; aqui simulamos outra prefeitura.
-const withContratanteEnv = <T>(nome: string, cnpj: string, fn: () => T): T => {
-  const old = { nome: process.env.CONTRATANTE_NOME, cnpj: process.env.CONTRATANTE_CNPJ };
-  process.env.CONTRATANTE_NOME = nome;
-  process.env.CONTRATANTE_CNPJ = cnpj;
-  try {
-    return fn();
-  } finally {
-    if (old.nome === undefined) delete process.env.CONTRATANTE_NOME; else process.env.CONTRATANTE_NOME = old.nome;
-    if (old.cnpj === undefined) delete process.env.CONTRATANTE_CNPJ; else process.env.CONTRATANTE_CNPJ = old.cnpj;
-  }
-};
-
-test('contrato sintético: outra modalidade, contratado com representante, vigência por duração', () => {
-  const c = withContratanteEnv('Município de Exemplo', '12.345.678/0001-90', () => extractContrato(SINTETICO));
+test('contrato sintético: outra modalidade, vigência por duração', () => {
+  const c = extractContrato(SINTETICO);
 
   assert.equal(c.numero_contrato, '045/2026');
   assert.equal(c.numero_processo, '2026/0456');
@@ -238,22 +163,11 @@ test('contrato sintético: outra modalidade, contratado com representante, vigê
 
   assert.equal(c.contratante.nome, 'Município de Exemplo');
   assert.equal(c.contratante.documento, '12.345.678/0001-90');
-  assert.equal(c.contratante.representante?.cargo, 'Secretário Municipal');
-  assert.equal(c.contratante.representante?.nome, 'João da Silva');
-  assert.equal(c.contratante.representante?.rg, '1234567');
-
-  // empresa com representante legal (≠ do caso do PDF real, onde o titular assina)
   assert.equal(c.contratado.nome, 'ACME COMERCIO LTDA');
   assert.equal(c.contratado.documento, '98.765.432/0001-10');
-  assert.equal(c.contratado.endereco, 'AVENIDA BRASIL, 500 - BAIRRO NOVO - EXEMPLO - PB');
-  assert.equal(c.contratado.representante?.nome, 'Maria Souza');
-  assert.equal(c.contratado.representante?.cpf, '987.654.321-00');
-  assert.equal(c.contratado.representante?.profissao, 'empresária');
 
-  assert.equal(c.assinatura.data, '2026-03-10');
   assert.equal(c.vigencia.data_inicio, '2026-03-10');
   assert.equal(c.vigencia.data_fim, '2027-03-10');
-  assert.equal(c.vigencia.data_fim_calculada, true);
   assert.ok(c.avisos.some((a) => /calculada/i.test(a)));
 
   assert.deepEqual(
@@ -265,15 +179,6 @@ test('contrato sintético: outra modalidade, contratado com representante, vigê
   );
   assert.equal(c.valor_total, 6250);
   assert.equal(c.validacoes.soma_itens_confere_valor_do_contrato, true);
-
-  assert.deepEqual(c.condicoes.prazo_pagamento, { quantidade: 20, unidade: 'dias corridos' });
-  assert.equal(c.foro, 'Cajazeiras');
-
-  // testemunhas legíveis (CPF estrito) => sem aviso
-  const testemunhas = c.signatarios.filter((s) => s.papel === 'TESTEMUNHA');
-  assert.deepEqual(testemunhas.map((t) => t.cpf), ['111.222.333-44', '555.666.777-88']);
-  assert.ok(testemunhas.every((t) => t.legivel));
-  assert.ok(!c.avisos.some((a) => /testemunha/i.test(a)));
 });
 
 // ------------------------------------------------------------------ robustez
@@ -366,24 +271,13 @@ for (const [nome, trecho] of Object.entries(PARTES_VARIANTES)) {
     assert.equal(isContrato(texto), true);
 
     const c = extractContrato(texto);
-    assert.equal(c.contratante.nome, 'Prefeitura Municipal de Marizópolis');
+    // O nome vem do OCR (sem contratante fixo), então só exigimos que tenha sido lido.
+    assert.ok(c.contratante.nome);
     assert.equal(c.contratante.documento, '01.612.941/0001-49');
     assert.equal(c.contratado.nome, 'EMPRESA XYZ LTDA');
     assert.equal(c.contratado.documento, '11.222.333/0001-44');
-    assert.equal(c.contratado.tipo_documento, 'CNPJ');
   });
 }
-
-test('partes: contratante fixo vence o que o OCR leu errado', () => {
-  const texto =
-    HEAD +
-    'Pelo presente instrumento, de um lado Prefeitura Municipal de MAR1ZOPOLIS, CNPJ 01.612.94l/0001-49, doravante simplesmente CONTRATANTE, e do outro lado EMPRESA XYZ LTDA, CNPJ 11.222.333/0001-44, doravante simplesmente CONTRATADA, decidiram' +
-    TAIL;
-  const c = extractContrato(texto);
-  assert.equal(c.contratante.nome, 'Prefeitura Municipal de Marizópolis');
-  assert.equal(c.contratante.documento, '01.612.941/0001-49');
-  assert.equal(c.contratado.nome, 'EMPRESA XYZ LTDA');
-});
 
 test('partes: sem qualificação legível, fornecedor sai do título e o CNPJ é o que não é da prefeitura', () => {
   const texto =
@@ -391,7 +285,7 @@ test('partes: sem qualificação legível, fornecedor sai do título e o CNPJ é
     'Pelo presente instrumento as partes abaixo assinam. Prefeitura CNPJ 01.612.941/0001-49. Fornecedor CNPJ 11.222.333/0001-44.' +
     TAIL;
   const c = extractContrato(texto);
-  assert.equal(c.contratante.nome, 'Prefeitura Municipal de Marizópolis');
+  assert.ok(c.contratante.nome);
   assert.equal(c.contratado.nome, 'EMPRESA XYZ LTDA');
   assert.equal(c.contratado.documento, '11.222.333/0001-44');
 });

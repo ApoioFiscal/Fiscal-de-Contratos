@@ -31,11 +31,30 @@ async function main() {
       valorTotal: 37135,
       vigenciaInicio: new Date('2026-08-19'),
       vigenciaFim: new Date('2026-12-31'),
-      vigenciaFimCalculada: false,
-      vigenciaTrecho:
-        'vigência do presente contrato será determinada: até 31 de dezembro de 2026, considerada da data de sua assinatura',
-      foro: 'Sousa',
       status: StatusContrato.RASCUNHO,
+      itensConferemTotalTabela: true,
+      itensConferemValorContrato: true,
+      avisos: [],
+      partes: {
+        create: [
+          {
+            papel: 'CONTRATANTE',
+            nome: 'Prefeitura Municipal de Marizópolis',
+            documento: '01.612.941/0001-49',
+          },
+          {
+            papel: 'CONTRATADO',
+            nome: 'RENATA RODRIGUES LOURENCO DE ALMEIDA',
+            documento: '35.848.636/0001-72',
+          },
+        ],
+      },
+      dotacoes: {
+        create: [
+          { unidadeCodigo: '02.010', unidade: 'GABINETE DO PREFEITO' },
+          { unidadeCodigo: '02.110', unidade: 'SECRETARIA DE SAUDE' },
+        ],
+      },
       itens: {
         create: [
           {

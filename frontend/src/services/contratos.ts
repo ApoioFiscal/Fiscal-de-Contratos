@@ -1,11 +1,5 @@
 import { apiRequest } from "./api";
-import type {
-  Contrato,
-  ContratoCondicoes,
-  PapelParte,
-  PapelSignatario,
-  TipoDocumento,
-} from "@/types/domain";
+import type { Contrato, PapelParte } from "@/types/domain";
 
 // Em produção o backend é outro projeto na Vercel; em desenvolvimento o Vite
 // faz proxy de `/api` para localhost:3333 (ver vite.config.ts).
@@ -26,35 +20,6 @@ export interface ParteContratoPayload {
   papel: PapelParte;
   nome: string | null;
   documento: string | null;
-  tipoDocumento: TipoDocumento | null;
-  endereco: string | null;
-  representanteNome: string | null;
-  representanteCargo: string | null;
-  representanteCpf: string | null;
-  representanteRg: string | null;
-  representanteOrgaoEmissorRg: string | null;
-  representanteNacionalidade: string | null;
-  representanteEstadoCivil: string | null;
-  representanteProfissao: string | null;
-  representanteEndereco: string | null;
-}
-
-export interface SignatarioContratoPayload {
-  id?: number;
-  papel: PapelSignatario;
-  ordem?: number;
-  nome: string | null;
-  cargo: string | null;
-  cpf: string | null;
-  cnpj: string | null;
-  rg: string | null;
-  orgaoEmissorRg: string | null;
-  nacionalidade: string | null;
-  estadoCivil: string | null;
-  profissao: string | null;
-  endereco: string | null;
-  confirmadoNoBloco: boolean;
-  legivel: boolean;
 }
 
 export interface ItemContratoPayload {
@@ -83,8 +48,8 @@ export interface DotacaoContratoPayload {
 }
 
 /**
- * Payload da revisão manual. Espelha o `GET /api/contratos/:id` (camelCase);
- * `condicoes` continua snake_case porque é o JSON preservado da extração.
+ * Payload da revisão manual. Espelha o `GET /api/contratos/:id` (camelCase) e
+ * contém somente os campos do escopo do contrato extraído.
  */
 export interface AtualizarContratoPayload {
   confirmar?: boolean;
@@ -96,18 +61,7 @@ export interface AtualizarContratoPayload {
   valorTotal?: number | null;
   vigenciaInicio?: string | null;
   vigenciaFim?: string | null;
-  vigenciaFimCalculada?: boolean;
-  vigenciaTrecho?: string | null;
-  foro?: string | null;
-  assinaturaLocal?: string | null;
-  assinaturaData?: string | null;
-  assinaturaDigital?: boolean;
-  assinaturaPlataforma?: string | null;
-  assinaturaAssinante?: string | null;
-  fundamentacaoLegal?: string[];
-  condicoes?: ContratoCondicoes | null;
   partes?: ParteContratoPayload[];
-  signatarios?: SignatarioContratoPayload[];
   itens?: ItemContratoPayload[];
   dotacoes?: DotacaoContratoPayload[];
   setores?: Array<{ idSetor: number; origem?: "DOTACAO" | "MANUAL" }>;
@@ -167,8 +121,8 @@ export async function importarContratoArquivo(arquivo: File): Promise<Importacao
     throw new Error(mensagem);
   }
 
-  // Recarrega o contrato persistido para devolver o estado completo (com itens,
-  // partes, signatários e avisos) para a tela de revisão.
+  // Recarrega o contrato persistido para devolver o estado completo (itens,
+  // partes, dotações e avisos) para a tela de revisão.
   const contrato = await obterContrato(payload.data.id).catch(() => null);
   return { ...payload.data, ...(contrato ?? {}) };
 }

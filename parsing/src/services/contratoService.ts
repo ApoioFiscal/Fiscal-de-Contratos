@@ -15,43 +15,17 @@ import { parseBrazilianNumber } from './tableParserService';
 
 // ---------------------------------------------------------------- tipos
 
-export type PessoaContrato = {
-  nome: string | null;
-  cargo: string | null;
-  cpf: string | null;
-  rg: string | null;
-  orgao_emissor_rg: string | null;
-  nacionalidade: string | null;
-  estado_civil: string | null;
-  profissao: string | null;
-  endereco: string | null;
-};
-
 export type ParteContrato = {
   papel: 'CONTRATANTE' | 'CONTRATADO';
   nome: string | null;
   documento: string | null;
-  tipo_documento: 'CNPJ' | 'CPF' | null;
-  endereco: string | null;
-  representante: PessoaContrato | null;
 };
 
-export type SignatarioContrato = {
-  papel: 'CONTRATANTE' | 'CONTRATADO' | 'TESTEMUNHA';
-  nome: string | null;
-  cargo: string | null;
-  cpf: string | null;
-  cnpj: string | null;
-  rg: string | null;
-  orgao_emissor_rg: string | null;
-  nacionalidade: string | null;
-  estado_civil: string | null;
-  profissao: string | null;
-  endereco: string | null;
-  /** true quando o nome foi confirmado no bloco de assinatura do PDF. */
-  confirmado_no_bloco_de_assinatura: boolean;
-  /** false quando o dado existe no documento mas o OCR não conseguiu lê-lo (ex.: manuscrito). */
-  legivel: boolean;
+/** Leitura interna da vigência; só as datas são expostas na extração. */
+type VigenciaInterna = {
+  data_inicio: string | null;
+  data_fim: string | null;
+  calculada: boolean;
 };
 
 export type ItemContrato = {
@@ -85,33 +59,13 @@ export type ContratoExtraction = {
   objeto: string | null;
   contratante: ParteContrato;
   contratado: ParteContrato;
-  signatarios: SignatarioContrato[];
-  assinatura: {
-    local: string | null;
-    data: string | null;
-    assinatura_digital: {
-      detectada: boolean;
-      plataforma: string | null;
-      assinante: string | null;
-    };
-  };
   vigencia: {
     data_inicio: string | null;
     data_fim: string | null;
-    /** true quando data_fim foi calculada a partir de uma duração (ex.: "12 meses"), não lida do texto. */
-    data_fim_calculada: boolean;
-    trecho: string | null;
   };
   valor_total: number | null;
   itens: ItemContrato[];
   dotacoes: DotacaoContrato[];
-  condicoes: {
-    prazo_execucao: { quantidade: number; unidade: string; marco: string | null } | null;
-    prazo_pagamento: { quantidade: number; unidade: string } | null;
-    reajuste: { prazo: string | null; indice: string | null } | null;
-  };
-  fundamentacao_legal: string[];
-  foro: string | null;
   validacoes: {
     soma_itens_confere_total_da_tabela: boolean | null;
     soma_itens_confere_valor_do_contrato: boolean | null;
@@ -260,69 +214,6 @@ export const isContrato = (text: string): boolean => {
 
 // ---------------------------------------------------------------- partes e pessoas
 
-const CARGO_PATTERN =
-  /^(Vice-Prefeit[oa]|Prefeit[oa]|Secret[áa]ri[oa](?:\s+Municipal)?|Presidente|Diretor(?:a)?|Gestor(?:a)?|S[óo]ci[oa](?:-Administrador(?:a)?)?|Administrador(?:a)?|Procurador(?:a)?|Representante\s+Legal|Propriet[áa]ri[oa]|Titular)\s+(.+)$/i;
-
-const ESTADO_CIVIL = /^(casad[oa]|solteir[oa]|divorciad[oa]|vi[úu]v[oa]|separad[oa]|uni[ãa]o\s+est[áa]vel)$/i;
-const NACIONALIDADE = /^(brasileir[oa]|estrangeir[oa]|portugu[êe]s(?:a)?|naturalizad[oa])$/i;
-const NAO_PROFISSAO = /^(residente|domiciliad|portador|inscrit|CPF|CNPJ|Carteira|RG\b|C\.?I\.?\b)/i;
-
-const parsePessoa = (value: string): PessoaContrato => {
-  const text = clean(value) ?? '';
-
-  const cpf = findCpf(text);
-  const rgMatch = text.match(
-    new RegExp(
-      String.raw`(?:Carteira\s+de\s+Identidade|\bRG\b)${LABEL_GAP}([A-Z]{2}-[\d.]+|\d[\d.\-A-Za-z]*)(?:\s+([A-Z]{2,6}\s*\/\s*[A-Z]{2}))?`,
-      'i',
-    ),
-  );
-  const enderecoMatch = text.match(
-    /residente\s+e\s+domiciliad[oa]\s+(?:na|no|em)\s+(.+?)(?=,\s*(?:CPF|CNPJ|Carteira|portador|inscrit|RG\b)|$)/i,
-  );
-
-  // Parte inicial: "<cargo> <nome>, <nacionalidade>, <estado civil>, <profissão>, residente..."
-  const beforeResidence = text.split(/,\s*residente\b/i)[0];
-  const tokens = beforeResidence.split(',').map((token) => token.trim()).filter(Boolean);
-
-  let cargo: string | null = null;
-  let nome: string | null = null;
-  const first = tokens[0] ?? '';
-  const cargoMatch = first.match(CARGO_PATTERN);
-
-  if (cargoMatch) {
-    cargo = clean(cargoMatch[1]);
-    nome = clean(cargoMatch[2]);
-  } else {
-    nome = clean(first.replace(/^(?:o\s+|a\s+)?(?:Sr\.?|Sra\.?|Senhor(?:a)?)\s+/i, ''));
-  }
-
-  // Um "nome" que contém dígitos ou rótulos de documento não é um nome.
-  if (nome && (/\d/.test(nome) || /^(CPF|CNPJ|Carteira)\b/i.test(nome))) nome = null;
-
-  let nacionalidade: string | null = null;
-  let estadoCivil: string | null = null;
-  let profissao: string | null = null;
-
-  for (const token of tokens.slice(1)) {
-    if (!nacionalidade && NACIONALIDADE.test(token)) nacionalidade = token;
-    else if (!estadoCivil && ESTADO_CIVIL.test(token)) estadoCivil = token;
-    else if (!profissao && !NAO_PROFISSAO.test(token) && /^[\p{L} ./-]+$/u.test(token)) profissao = token;
-  }
-
-  return {
-    nome,
-    cargo,
-    cpf,
-    rg: rgMatch ? clean(rgMatch[1]) : null,
-    orgao_emissor_rg: rgMatch?.[2] ? clean(rgMatch[2].replace(/\s+/g, '')) : null,
-    nacionalidade,
-    estado_civil: estadoCivil,
-    profissao,
-    endereco: clean(enderecoMatch?.[1]),
-  };
-};
-
 const STREET_START =
   /^(RUA|R\.|AV\.?|AVENIDA|TRAVESSA|TV\.|ALAMEDA|PRA[ÇC]A|ESTRADA|RODOVIA|S[ÍI]TIO|FAZENDA|LOTEAMENTO|DISTRITO|POVOADO|QUADRA|CONJUNTO|BR-?\d|PB-?\d)\b/i;
 
@@ -349,19 +240,14 @@ const splitNomeEndereco = (value: string): { nome: string | null; endereco: stri
 };
 
 const parseParte = (papel: ParteContrato['papel'], clause: string | null): ParteContrato => {
-  const empty: ParteContrato = {
-    papel,
-    nome: null,
-    documento: null,
-    tipo_documento: null,
-    endereco: null,
-    representante: null,
-  };
+  const empty: ParteContrato = { papel, nome: null, documento: null };
   if (!clause) return empty;
 
-  const [head, representanteText] = clause.split(
+  // Tudo depois de "neste ato representado por" é a qualificação do representante,
+  // que não faz mais parte do contrato. Corta para não capturar o CPF dele como documento.
+  const head = clause.split(
     /,?\s*neste\s+ato\s+representad[oa]s?\s+(?:pel[oa]s?|por)\s+/i,
-  );
+  )[0];
 
   const cnpj = findCnpj(head);
   const cpf = cnpj ? null : findCpf(head);
@@ -372,15 +258,12 @@ const parseParte = (papel: ParteContrato['papel'], clause: string | null): Parte
       /munic/i.test(m) ? 'Município de ' : '',
     )
     .replace(/^\s*(?:de\s+(?:um|outro)\s+lado|do\s+outro\s+lado|e)\s+/i, '');
-  const { nome, endereco } = splitNomeEndereco(withoutDocument);
+  const { nome } = splitNomeEndereco(withoutDocument);
 
   return {
     papel,
     nome: nome ? fixOcrDigitsInWords(nome) : null,
     documento: cnpj ?? cpf,
-    tipo_documento: cnpj ? 'CNPJ' : cpf ? 'CPF' : null,
-    endereco: endereco ? fixOcrDigitsInWords(endereco) : null,
-    representante: representanteText ? parsePessoa(representanteText) : null,
   };
 };
 
@@ -475,13 +358,17 @@ const fillParteFallbacks = (
     if (fromTitle) filled.nome = fixOcrDigitsInWords(fromTitle);
   }
 
+  // O 1º CNPJ do documento costuma ser o da prefeitura (contratante). Preenchendo
+  // aqui, o fallback do contratado consegue escolher o CNPJ que não é esse.
+  if (papel === 'CONTRATANTE' && !filled.documento) {
+    const all = [...flat.matchAll(/\b(\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2})\b/g)].map((m) => m[1]);
+    if (all.length > 0) filled.documento = all[0];
+  }
+
   if (papel === 'CONTRATADO' && !filled.documento) {
     const all = [...flat.matchAll(/\b(\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2})\b/g)].map((m) => m[1]);
     const other = all.find((cnpj) => cnpj !== contratante?.documento);
-    if (other) {
-      filled.documento = other;
-      filled.tipo_documento = 'CNPJ';
-    }
+    if (other) filled.documento = other;
   }
 
   // Nome do contratado igual ao da prefeitura é sinal de captura errada.
@@ -490,34 +377,6 @@ const fillParteFallbacks = (
   }
 
   return filled;
-};
-
-// ---------------------------------------------------------------- contratante fixo
-
-/**
- * O contratante é sempre a própria prefeitura. Quando configurado (env), o valor configurado
- * vence o que o OCR leu — evita "MAR1ZOPOLIS" e afins. O representante (prefeito) continua
- * vindo do texto.
- */
-const applyContratanteFixo = (parte: ParteContrato): ParteContrato => {
-  const nome = process.env.CONTRATANTE_NOME?.trim() || DEFAULT_CONTRATANTE.nome;
-  const cnpjRaw = process.env.CONTRATANTE_CNPJ?.trim() || DEFAULT_CONTRATANTE.cnpj;
-  const endereco = process.env.CONTRATANTE_ENDERECO?.trim() || DEFAULT_CONTRATANTE.endereco;
-  const digits = cnpjRaw.replace(/\D/g, '');
-
-  return {
-    ...parte,
-    nome: nome || parte.nome,
-    documento: digits.length === 14 ? maskCnpj(digits) : parte.documento,
-    tipo_documento: digits.length === 14 ? 'CNPJ' : parte.tipo_documento,
-    endereco: parte.endereco ?? (endereco || null),
-  };
-};
-
-const DEFAULT_CONTRATANTE = {
-  nome: 'Prefeitura Municipal de Marizópolis',
-  cnpj: '01.612.941/0001-49',
-  endereco: '',
 };
 
 // ---------------------------------------------------------------- identificação
@@ -932,171 +791,18 @@ const extractDotacoes = (lines: string[]): DotacaoContrato[] => {
 
 // ---------------------------------------------------------------- assinaturas
 
-const extractAssinatura = (text: string, flat: string) => {
+/** A data do bloco de assinatura é usada apenas como fallback da vigência. */
+const extractDataAssinatura = (flat: string): string | null => {
   const local = flat.match(
     /([A-ZÀ-Ý][\p{L}]+(?:\s+[\p{L}]+){0,3})\s*-\s*([A-Z]{2})\s*,\s*(\d{1,2})\s+de\s+(\p{L}+)\s+de\s+(\d{4})/u,
   );
+  if (!local) return null;
 
-  let data: string | null = null;
-  if (local) {
-    const month = monthNumber(local[4]);
-    if (month) data = toIso(Number(local[3]), month, Number(local[5]));
-  }
-
-  const digital = /Documento\s+assinado\s+digitalmente\s+(.+?)\s+Data\b/i.exec(flat);
-  const plataforma = /iti\.gov\.br/i.test(text) || /gov\.?br/i.test(flat) ? 'gov.br' : null;
-
-  return {
-    local: local ? `${local[1]} - ${local[2]}` : null,
-    data,
-    assinatura_digital: {
-      detectada: Boolean(digital),
-      plataforma: digital ? plataforma : null,
-      assinante: digital ? clean(fixOcrDigitsInWords(digital[1])) : null,
-    },
-  };
+  const month = monthNumber(local[4]);
+  return month ? toIso(Number(local[3]), month, Number(local[5])) : null;
 };
 
-const NAME_NOISE = new Set(['DE', 'DA', 'DO', 'DAS', 'DOS', 'E']);
-
-/** Todos os termos relevantes do nome aparecem no bloco de assinatura? */
-const blockHasName = (block: string, nome: string | null): boolean => {
-  if (!nome) return false;
-  const haystack = stripAccents(block).toUpperCase();
-  const tokens = stripAccents(nome)
-    .toUpperCase()
-    .split(/\s+/)
-    .filter((token) => token.length >= 3 && !NAME_NOISE.has(token));
-  return tokens.length > 0 && tokens.every((token) => haystack.includes(token));
-};
-
-const emptySignatario = (papel: SignatarioContrato['papel']): SignatarioContrato => ({
-  papel,
-  nome: null,
-  cargo: null,
-  cpf: null,
-  cnpj: null,
-  rg: null,
-  orgao_emissor_rg: null,
-  nacionalidade: null,
-  estado_civil: null,
-  profissao: null,
-  endereco: null,
-  confirmado_no_bloco_de_assinatura: false,
-  legivel: true,
-});
-
-const TESTEMUNHAS_POR_EXTENSO: Record<string, number> = { uma: 1, duas: 2, duos: 2, dois: 2, tres: 3, três: 3 };
-
-const buildSignatarios = (
-  text: string,
-  contratante: ParteContrato,
-  contratado: ParteContrato,
-  assinaturaDigital: { assinante: string | null },
-  avisos: string[],
-): SignatarioContrato[] => {
-  const signatarios: SignatarioContrato[] = [];
-
-  const idxTestemunhas = text.search(/^\s*TESTEMUNHAS\s*:?\s*$/im);
-  const idxContratante = text.search(/PELO\s+\S{0,6}\s*\S{0,6}\s*TRATANTE|PELO\s+CONTRATANTE/i);
-  const idxContratado = text.search(/PELO\s+CONTRATAD[OA]/i);
-  const blockContratante =
-    idxContratante !== -1 ? text.slice(idxContratante, idxContratado > idxContratante ? idxContratado : undefined) : '';
-  const blockContratado = idxContratado !== -1 ? text.slice(idxContratado) : '';
-  const blockTestemunhas =
-    idxTestemunhas !== -1
-      ? text.slice(idxTestemunhas, idxContratante > idxTestemunhas ? idxContratante : undefined)
-      : '';
-
-  // --- Contratante: dados completos vêm da qualificação (bloco de assinatura costuma sair ilegível).
-  const rep = contratante.representante;
-  const contratanteSig = emptySignatario('CONTRATANTE');
-  if (rep) {
-    Object.assign(contratanteSig, {
-      nome: rep.nome,
-      cargo: rep.cargo,
-      cpf: rep.cpf,
-      rg: rep.rg,
-      orgao_emissor_rg: rep.orgao_emissor_rg,
-      nacionalidade: rep.nacionalidade,
-      estado_civil: rep.estado_civil,
-      profissao: rep.profissao,
-      endereco: rep.endereco,
-    });
-  }
-  contratanteSig.confirmado_no_bloco_de_assinatura = blockHasName(blockContratante, contratanteSig.nome);
-  if (rep && !contratanteSig.confirmado_no_bloco_de_assinatura) {
-    avisos.push(
-      'Bloco de assinatura do contratante ilegível no OCR: os dados do signatário foram tirados da qualificação das partes. Confira a assinatura no PDF.',
-    );
-  }
-  if (rep || contratante.nome) signatarios.push(contratanteSig);
-
-  // --- Contratado: se não há representante, o titular da empresa é quem assina.
-  const contratadoSig = emptySignatario('CONTRATADO');
-  const repContratado = contratado.representante;
-  contratadoSig.nome = repContratado?.nome ?? contratado.nome;
-  contratadoSig.cargo = repContratado?.cargo ?? null;
-  contratadoSig.cpf = repContratado?.cpf ?? (contratado.tipo_documento === 'CPF' ? contratado.documento : null);
-  contratadoSig.cnpj = contratado.tipo_documento === 'CNPJ' ? contratado.documento : null;
-  contratadoSig.rg = repContratado?.rg ?? null;
-  contratadoSig.orgao_emissor_rg = repContratado?.orgao_emissor_rg ?? null;
-  contratadoSig.endereco = repContratado?.endereco ?? contratado.endereco;
-  contratadoSig.confirmado_no_bloco_de_assinatura =
-    blockHasName(blockContratado, contratadoSig.nome) ||
-    blockHasName(assinaturaDigital.assinante ?? '', contratadoSig.nome);
-  if (contratadoSig.nome || contratadoSig.cnpj) signatarios.push(contratadoSig);
-
-  // --- Testemunhas: costumam ser manuscritas, então só aceitamos CPF estrito.
-  const flatBlock = flatten(text);
-  const countMatch = flatBlock.match(/por\s+(\p{L}+|\d+)\s+testemunhas/iu);
-  const countRaw = countMatch?.[1]?.toLowerCase() ?? '';
-  const expected = /^\d+$/.test(countRaw) ? Number(countRaw) : TESTEMUNHAS_POR_EXTENSO[countRaw] ?? 0;
-
-  const cpfsTestemunhas = [
-    ...new Set(blockTestemunhas.match(/\b\d{3}\.\d{3}\.\d{3}-\d{2}\b/g) ?? []),
-  ];
-
-  cpfsTestemunhas.forEach((cpf) => {
-    const witness = emptySignatario('TESTEMUNHA');
-    witness.cpf = cpf;
-    signatarios.push(witness);
-  });
-
-  const missing = Math.max(expected - cpfsTestemunhas.length, 0);
-  for (let i = 0; i < missing; i += 1) {
-    const witness = emptySignatario('TESTEMUNHA');
-    witness.legivel = false;
-    signatarios.push(witness);
-  }
-  if (missing > 0) {
-    avisos.push(
-      `${missing} testemunha(s) não puderam ser lidas (assinatura/identificação manuscrita): preencha manualmente.`,
-    );
-  }
-
-  return signatarios;
-};
-
-// ---------------------------------------------------------------- condições
-
-const extractFundamentacao = (flat: string): string[] => {
-  const clause = sliceBetween(flat, /CL[ÁA]USULA\s+PRIMEIRA\s*-\s*DOS\s+FUNDAMENTOS\s*:/i, /CL[ÁA]USULA\s+SEGUNDA/i);
-  if (!clause) return [];
-
-  const laws: string[] = [];
-  const pattern = new RegExp(String.raw`Lei\s+(Federal|Complementar)?\s*${NUM}(\d{1,3}(?:\.\d{3})?)`, 'gi');
-  let match: RegExpExecArray | null;
-
-  while ((match = pattern.exec(clause)) !== null) {
-    const yearMatch = clause.slice(match.index + match[0].length, match.index + match[0].length + 60).match(/(\d{4})/);
-    const kind = match[1] ? `Lei ${match[1][0].toUpperCase()}${match[1].slice(1).toLowerCase()}` : 'Lei';
-    const label = `${kind} nº ${match[2]}${yearMatch ? `/${yearMatch[1]}` : ''}`;
-    if (!laws.includes(label)) laws.push(label);
-  }
-
-  return laws;
-};
+// ---------------------------------------------------------------- vigência
 
 const PRAZO_VIGENCIA_HEADING = /CL[ÁA]USULA\s+[\p{L}ÁÉÍÓÚÂÊÔÃÕÇ ]+?\s*-\s*DO\s+PRAZO\s+E\s+DA\s+VIG[ÊE]NCIA\s*:/iu;
 const NEXT_CLAUSE = /CL[ÁA]USULA\s+/i;
@@ -1108,10 +814,9 @@ const prazoVigenciaClause = (flat: string): string =>
 const extractVigencia = (
   rawFlat: string,
   dataAssinatura: string | null,
-): ContratoExtraction['vigencia'] => {
+): VigenciaInterna => {
   const flat = prazoVigenciaClause(rawFlat);
-  const trechoMatch = flat.match(/vig[êe]ncia[^;]{0,200}/i);
-  const trecho = clean(trechoMatch?.[0]);
+  const trecho = clean(flat.match(/vig[êe]ncia[^;]{0,200}/i)?.[0]);
 
   const dataExtenso = flat.match(
     /vig[êe]ncia[^.]{0,160}?at[ée]\s+(?:o\s+dia\s+)?(\d{1,2})\s+de\s+(\p{L}+)\s+de\s+(\d{4})/iu,
@@ -1141,33 +846,7 @@ const extractVigencia = (
     calculada = true;
   }
 
-  return { data_inicio: dataInicio, data_fim: dataFim, data_fim_calculada: calculada, trecho };
-};
-
-const extractCondicoes = (flat: string): ContratoExtraction['condicoes'] => {
-  const prazos = prazoVigenciaClause(flat);
-  const execucao = prazos.match(
-    /prazos?\s+para\s+(?:produ\S*|entrega|execu\S*)[^.]{0,100}?at[ée]\s+(\d{1,3})\s+(dias\s+[úu]teis|dias\s+corridos|dias|meses)/i,
-  );
-  const marco = prazos.match(
-    /(?:expedi[çc][ãa]o|emiss[ãa]o|recebimento)\s+d[ao]s?\s+(Ordem\s+de\s+(?:Fornecimento|Servi[çc]o)|Nota\s+de\s+Empenho)/i,
-  );
-  const pagamento = flat.match(
-    /prazo\s+para\s+pagamento\s+ser[áa]\s+de\s+at[ée]\s+(\d{1,3})\s*(?:\([^)]*\)\s*)?(dias\s+corridos|dias\s+[úu]teis|dias)/i,
-  );
-  const reajustePrazo = flat.match(/irreajust[áa]veis\s+no\s+prazo\s+de\s+([^.]{2,40})/i);
-  const indice = flat.match(/\b(IPCA|INPC|IGP-?M|INCC|IPC-?FIPE)\b/i);
-
-  return {
-    prazo_execucao: execucao
-      ? { quantidade: Number(execucao[1]), unidade: execucao[2].toLowerCase(), marco: clean(marco?.[1]) }
-      : null,
-    prazo_pagamento: pagamento ? { quantidade: Number(pagamento[1]), unidade: pagamento[2].toLowerCase() } : null,
-    reajuste:
-      reajustePrazo || indice
-        ? { prazo: clean(reajustePrazo?.[1]), indice: indice ? indice[1].toUpperCase() : null }
-        : null,
-  };
+  return { data_inicio: dataInicio, data_fim: dataFim, calculada };
 };
 
 const extractValorTotal = (flat: string): number | null => {
@@ -1190,8 +869,8 @@ export const extractContrato = (text: string): ContratoExtraction => {
   // Partes
   const { contratanteClause, contratadoClause } = locatePartyClauses(flat);
 
-  const contratante = applyContratanteFixo(
-    fillParteFallbacks(parseParte('CONTRATANTE', contratanteClause), flat, 'CONTRATANTE'),
+  const contratante = fillParteFallbacks(
+    parseParte('CONTRATANTE', contratanteClause), flat, 'CONTRATANTE',
   );
   const contratado = fillParteFallbacks(parseParte('CONTRATADO', contratadoClause), flat, 'CONTRATADO', contratante);
 
@@ -1200,9 +879,8 @@ export const extractContrato = (text: string): ContratoExtraction => {
   const numeroContrato = extractNumeroContrato(text);
   const numeroProcesso = extractNumeroProcesso(text);
 
-  // Assinatura e vigência
-  const assinatura = extractAssinatura(text, flat);
-  const vigencia = extractVigencia(flat, assinatura.data);
+  // Vigência (a data da assinatura é usada internamente como fallback)
+  const vigencia = extractVigencia(flat, extractDataAssinatura(flat));
 
   // Itens e valores
   const { rows, totalTabela } = locateItemRows(lines);
@@ -1242,13 +920,9 @@ export const extractContrato = (text: string): ContratoExtraction => {
   if (!numeroProcesso) avisos.push('Número do processo não localizado.');
   if (!contratante.nome || !contratado.nome) avisos.push('Não foi possível identificar todas as partes do contrato.');
   if (!vigencia.data_fim) avisos.push('Data final da vigência não localizada.');
-  if (vigencia.data_fim_calculada) {
+  if (vigencia.calculada) {
     avisos.push('A data final da vigência foi calculada a partir do prazo informado no contrato: confira.');
   }
-
-  const signatarios = buildSignatarios(text, contratante, contratado, assinatura.assinatura_digital, avisos);
-
-  const foro = flat.match(/Foro\s+da\s+Comarca\s+de\s+([A-ZÀ-Ý][\p{L} ]*?)(?=\s*[.,;]|\s+E,)/u)?.[1];
 
   return {
     numero_contrato: numeroContrato,
@@ -1258,15 +932,10 @@ export const extractContrato = (text: string): ContratoExtraction => {
     objeto,
     contratante,
     contratado,
-    signatarios,
-    assinatura,
-    vigencia,
+    vigencia: { data_inicio: vigencia.data_inicio, data_fim: vigencia.data_fim },
     valor_total: valorTotal,
     itens: reconciled.itens,
     dotacoes: extractDotacoes(lines),
-    condicoes: extractCondicoes(flat),
-    fundamentacao_legal: extractFundamentacao(flat),
-    foro: clean(foro),
     validacoes,
     avisos,
   };
