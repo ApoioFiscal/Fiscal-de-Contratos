@@ -102,6 +102,9 @@ export const buildStructuredData = (input: StructuredDataInput): StructuredDataR
       responsavel: contrato.contratante.representante?.nome,
       data_documento: dataAssinaturaBr,
       fornecedor: contrato.contratado.nome,
+      nome_fornecedor: contrato.contratado.nome,
+      cnpj_fornecedor: contrato.contratado.tipo_documento === 'CNPJ' ? contrato.contratado.documento : null,
+      documento_fornecedor: contrato.contratado.documento,
     };
     for (const [key, value] of Object.entries(overrides)) {
       if (value) structuredData[key] = value;
