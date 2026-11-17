@@ -14,6 +14,9 @@ const OCR_FIXTURE = readFileSync(
   'utf8',
 );
 
+const readOcr = (arquivo: string) =>
+  readFileSync(path.join(__dirname, '__fixtures__', arquivo), 'utf8');
+
 // ------------------------------------------------------------------ PDF real (com ruído de OCR)
 
 test('contrato real: identificação, modalidade e objeto', () => {
@@ -391,4 +394,81 @@ test('partes: sem qualificação legível, fornecedor sai do título e o CNPJ é
   assert.equal(c.contratante.nome, 'Prefeitura Municipal de Marizópolis');
   assert.equal(c.contratado.nome, 'EMPRESA XYZ LTDA');
   assert.equal(c.contratado.documento, '11.222.333/0001-44');
+});
+
+// ------------------------------------------------------------------ digitalizações reais (OCR ruidoso)
+
+test('contrato 00140: "CONTRATO PMM n° ... /2026", modalidade DISPENSA DE VALOR e item único', () => {
+  const c = extractContrato(readOcr('contrato_pmm_00140_2026.ocr.txt'));
+
+  assert.equal(c.numero_contrato, '00140/2026');
+  assert.equal(c.numero_processo, '260807DV00015/2026');
+  assert.equal(c.modalidade, 'Dispensa de Licitação');
+  assert.equal(c.numero_modalidade, 'DV00015/2026');
+  assert.equal(c.itens.length, 1);
+  assert.deepEqual(
+    {
+      quantidade: c.itens[0].quantidade,
+      unitario: c.itens[0].valor_unitario,
+      total: c.itens[0].valor_total,
+    },
+    { quantidade: 725, unitario: 88, total: 63800 },
+  );
+  assert.equal(c.valor_total, 63800);
+  assert.equal(c.validacoes.soma_itens_confere_valor_do_contrato, true);
+  assert.ok(!c.avisos.some((a) => /Número do contrato/i.test(a)));
+});
+
+test('contrato 00143: código perdido, salto de código, rodapé e total corrompido', () => {
+  const c = extractContrato(readOcr('contrato_pmm_00143_2026.ocr.txt'));
+
+  assert.equal(c.numero_contrato, '00143/2026');
+  assert.equal(c.modalidade, 'Pregão Eletrônico');
+  assert.equal(c.numero_modalidade, '09014/2026');
+  assert.deepEqual(c.itens.map((i) => i.codigo), [1, 2, 3, 4, 5, 8, 9, 12, 13, 14]);
+
+  // O OCR comeu o código "2": a cauda órfã vira item novo, não descrição do item 1.
+  const item2 = c.itens.find((i) => i.codigo === 2);
+  assert.ok(item2);
+  assert.match(item2.descricao, /^ENCORDOAMENTOS PARA VIOLÃO/);
+  assert.equal(item2.quantidade, 50);
+  assert.equal(item2.valor_total, 1967.5);
+
+  // "1.172,0-6" não é número válido: o total é recalculado por quantidade × unitário.
+  const item13 = c.itens.find((i) => i.codigo === 13);
+  assert.ok(item13);
+  assert.equal(item13.quantidade, 200);
+  assert.equal(item13.valor_unitario, 5.86);
+  assert.equal(item13.valor_total, 1172);
+
+  assert.ok(c.itens.every((i) => !/marizopolis\.pb\.gov\.br|CNPJ:/i.test(i.descricao)));
+  assert.equal(c.valor_total, 55825.36);
+  // A fixture é um recorte da tabela: a divergência precisa ser sinalizada, não escondida.
+  assert.equal(c.validacoes.soma_itens_confere_valor_do_contrato, false);
+  assert.ok(c.avisos.some((a) => /não confere/.test(a)));
+});
+
+test('contrato 00155: cabeçalho quebrado, LOTE em duas linhas e valores em linhas separadas', () => {
+  const c = extractContrato(readOcr('contrato_pmm_00155_2026.ocr.txt'));
+
+  assert.equal(c.numero_contrato, '00155/2026');
+  assert.equal(c.numero_processo, '260812PE00023/2026');
+  assert.equal(c.modalidade, 'Pregão Eletrônico');
+  assert.equal(c.numero_modalidade, '00023/2026');
+  assert.equal(c.itens.length, 3);
+  assert.deepEqual(c.itens.map((i) => i.quantidade), [1, 1, 1]);
+  assert.deepEqual(c.itens.map((i) => i.valor_total), [191020, 1669384, 518920]);
+  assert.equal(c.itens[0].unidade, 'Un');
+  assert.equal(c.itens[0].unidade_original, 'UNO');
+
+  // "TOTAL", "I" e a 2ª linha do título do lote não entram na descrição.
+  assert.match(c.itens[0].descricao, /^Kits do estudante e do professor/);
+  assert.match(c.itens[1].descricao, /^Kits individuais, kits do professor\/mediador/);
+  assert.match(c.itens[2].descricao, /itens de cadernos estruturados/);
+  assert.ok(c.itens.every((i) => !/^\s*(?:TOTAL|I)\b/i.test(i.descricao)));
+  assert.ok(!c.itens.some((i) => /FINAIS E KITS DE MEDIAÇÃO|ESTUDANTES E PROFESSORES\)/.test(i.descricao)));
+
+  assert.equal(c.valor_total, 2379324);
+  assert.equal(c.validacoes.soma_itens_confere_valor_do_contrato, true);
+  assert.equal(c.validacoes.soma_itens_confere_total_da_tabela, true);
 });

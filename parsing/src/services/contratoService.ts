@@ -129,6 +129,27 @@ const MESES: Record<string, number> = {
 /** "Nº" aparece como Nº, N°, N", No., N: ... Exige um separador para não casar "NESTE". */
 const NUM = String.raw`N\s*(?:[º°"”'.]+\s*:?|:|[oO]\b\.?\s*:?)\s*`;
 
+/**
+ * Variante usada só no número do contrato: aceita também "N 045/2026" (sem símbolo),
+ * comum quando o OCR perde o "º". O lookahead exige um dígito depois, então "NESTE"
+ * continua sem casar.
+ */
+const NUM_CONTRATO = String.raw`N\s*(?:[º°"”'.]+\s*:?|:|[oO]\b\.?\s*:?|(?=\s*\d))\s*`;
+
+/**
+ * Modelos de emissão escrevem "CONTRATO PMM n° 00140 /2026": um qualifier curto entre
+ * a palavra CONTRATO e o rótulo do número. Limite de 2 tokens de 2-8 letras para não
+ * capturar prosa ("TERMO DE CONTRATO NESTE ATO" continua sem número).
+ */
+const CONTRATO_NUMERO_PATTERN = new RegExp(
+  String.raw`\bCONTRATO\s+(?:[A-Za-zÀ-ÿ]{2,8}\s+){0,2}${NUM_CONTRATO}(\d[\w./-]*(?:\s*/\s*[\w-]+)*)`,
+  'i',
+);
+
+/** "00140 /2026" (espaço antes da barra, típico de OCR) -> "00140/2026". */
+const normalizarNumeroContrato = (raw: string | null | undefined): string | null =>
+  clean(raw?.replace(/\s*\/\s*/g, '/').replace(/[.,;:]+$/, ''));
+
 /** Aceita até 4 caracteres de lixo entre o rótulo e o número (ex.: `CNPJ ti" 01.612...`). */
 const LABEL_GAP = String.raw`\s*\S{0,4}?\s*`;
 
@@ -229,8 +250,7 @@ export const isContrato = (text: string): boolean => {
 
   if (HEAD_MARKS_OTHER_DOCUMENT.test(headStart) || MENTIONS_MINUTA.test(head)) return false;
 
-  const hasTitle =
-    /TERMO\s+DE\s+CONTRATO/i.test(head) || new RegExp(String.raw`CONTRATO\s+${NUM}\d`, 'i').test(head);
+  const hasTitle = /TERMO\s+DE\s+CONTRATO/i.test(head) || CONTRATO_NUMERO_PATTERN.test(head);
   const hasParties =
     new RegExp(MARK_CONTRATANTE, 'i').test(flat) && new RegExp(MARK_CONTRATADO, 'i').test(flat);
   const clauseCount = (flat.match(/CL[ÁA]USULA\s+/gi) ?? []).length;
@@ -503,10 +523,10 @@ const DEFAULT_CONTRATANTE = {
 // ---------------------------------------------------------------- identificação
 
 const extractNumeroContrato = (text: string): string | null => {
-  const pattern = new RegExp(String.raw`CONTRATO\s+${NUM}(\d[\w./-]*)`, 'i');
-  const raw = text.slice(0, HEAD_SIZE).match(pattern)?.[1] ?? text.match(pattern)?.[1];
-  // "CONTRATO Nº 045/2026." no fim de frase — o ponto final não faz parte do número.
-  return clean(raw?.replace(/[.,;:]+$/, '')) ?? null;
+  const raw =
+    CONTRATO_NUMERO_PATTERN.exec(text.slice(0, HEAD_SIZE))?.[1] ??
+    CONTRATO_NUMERO_PATTERN.exec(text)?.[1];
+  return normalizarNumeroContrato(raw);
 };
 
 const extractNumeroProcesso = (text: string): string | null => {
@@ -532,7 +552,7 @@ const MODALIDADE_LABEL: Array<[RegExp, string]> = [
 const extractModalidade = (text: string): { modalidade: string | null; numero: string | null } => {
   const head = text.slice(0, HEAD_SIZE);
   const headerPattern = new RegExp(
-    String.raw`^\s*(DISPENSA|INEXIGIBILIDADE|PREG[ÃA]O(?:\s+(?:ELETR[ÔO]NICO|PRESENCIAL))?|CONCORR[ÊE]NCIA|TOMADA\s+DE\s+PRE[ÇC]OS|CONVITE|ADES[ÃA]O)(?:\s+DE\s+LICITA[ÇC][ÃA]O)?\s+${NUM}([\w./-]+)`,
+    String.raw`^\s*(DISPENSA|INEXIGIBILIDADE|PREG[ÃA]O(?:\s+(?:ELETR[ÔO]NICO|PRESENCIAL))?|CONCORR[ÊE]NCIA|TOMADA\s+DE\s+PRE[ÇC]OS|CONVITE|ADES[ÃA]O)(?:\s+DE\s+(?:LICITA[ÇC][ÃA]O|VALOR))?\s+${NUM}([\w./-]+)`,
     'im',
   );
   const header = head.match(headerPattern);
@@ -566,67 +586,193 @@ const normalizeUnidade = (raw: string): { valor: string; suspeito: boolean } => 
   if (/^[MN]4?[3³]$/.test(compact)) return { valor: 'm³', suspeito: !/^M[3³]$/.test(compact) };
 
   const known: Record<string, string> = {
-    UN: 'Un', UND: 'Un', UNID: 'Un', UNIDADE: 'Un', CX: 'Cx', CAIXA: 'Cx', KG: 'Kg',
+    UN: 'Un', UND: 'Un', UNO: 'Un', UNID: 'Un', UNIDADE: 'Un', CX: 'Cx', CAIXA: 'Cx', KG: 'Kg',
     L: 'L', LT: 'L', LTS: 'L', M: 'm', ML: 'm', PCT: 'Pct', PC: 'Pct', PAR: 'Par',
     SACO: 'Saco', SC: 'Saco', RESMA: 'Resma',
   };
   return { valor: known[compact] ?? raw.trim(), suspeito: false };
 };
 
+/**
+ * Quando o OCR quebra a cauda da tabela em várias linhas:
+ *   UNO 01 R$
+ *   191.020,00
+ *   R$
+ *   191.020,00
+ * a 1ª traz unidade + quantidade, e as 2 linhas monetárias seguintes são unitário e total.
+ */
+const TAIL_PREFIX = new RegExp(
+  String.raw`^(?:(.*?)\s+)?(\S{1,10})\s+(\d{1,6}(?:,\d{1,3})?)\s*,?\s*(?:R\$)?\s*$`,
+  'i',
+);
+/**
+ * Variante tolerante para a cauda na mesma linha quando o OCR corrompe um dos montantes
+ * (ex.: `und 200 5,86 1.172,0-6`). O valor ilegível volta `null` do parse e o
+ * reconcile recalcula a partir da quantidade × unitário, sem inventar o total lido.
+ */
+const ITEM_TAIL_LOOSE = new RegExp(
+  String.raw`^(?:(.*?)\s+)?(\S{1,10})\s+(\d{1,6}(?:,\d{1,3})?)\s+(${MONEY_GARBLED})\s+([\d.]+,[\dOolI|()\-.,]{1,4})\s*$`,
+);
+const MONEY_LINE = /^\s*[R$_.()\-\s]*(\d[\d.]*,\d{2})[_.()\-\s]*$/;
+const DECORATION_LINE = /^\s*(?:R\$|[_.\-]+)\s*$/i;
+const HEADER_FRAGMENT =
+  /QUANT\.?\s+PRE[ÇC]O|^\s*(?:UNIT[ÁA]RIO\.?|PRE[ÇC]O(?:\s+TOTAL)?\.?|\/FABRICANTE|N[\"º°']?\s+DESCRI[ÇC][ÃA]O)\s*$/i;
+
+type ItemTail = { unidade: string; quantidade: string; unitario: string; total: string };
+
+type TailMatch = { desc: string | null; tail: ItemTail; consumed: number };
+
+const matchItemTail = (content: string, lines: string[], index: number): TailMatch | null => {
+  const mesmaLinha = content.match(ITEM_TAIL) ?? content.match(ITEM_TAIL_LOOSE);
+  if (mesmaLinha) {
+    return {
+      desc: mesmaLinha[1]?.trim() || null,
+      tail: {
+        unidade: mesmaLinha[2],
+        quantidade: mesmaLinha[3],
+        unitario: mesmaLinha[4],
+        total: mesmaLinha[5],
+      },
+      consumed: 1,
+    };
+  }
+
+  const prefixo = content.match(TAIL_PREFIX);
+  if (!prefixo) return null;
+
+  const montantes: string[] = [];
+  let consumed = 1;
+  for (let j = index + 1; j < Math.min(lines.length, index + 8) && montantes.length < 2; j += 1) {
+    const proxima = lines[j];
+    if (DECORATION_LINE.test(proxima)) {
+      consumed += 1;
+      continue;
+    }
+    const valor = proxima.match(MONEY_LINE)?.[1];
+    if (!valor) break;
+    montantes.push(valor);
+    consumed += 1;
+  }
+  if (montantes.length < 2) return null;
+
+  return {
+    desc: prefixo[1]?.trim() || null,
+    tail: {
+      unidade: prefixo[2],
+      quantidade: prefixo[3],
+      unitario: montantes[0],
+      total: montantes[1],
+    },
+    consumed,
+  };
+};
+
+/** Encontra o início da tabela, inclusive quando o cabeçalho vem quebrado em várias linhas. */
+const findTableStart = (lines: string[]): number => {
+  const direto = lines.findIndex((line) => /C[ÓO]DIGO/i.test(line) && /DISCRIMINA/i.test(line));
+  if (direto !== -1) return direto;
+
+  return lines.findIndex((line, index) => {
+    if (!/DESCRI[ÇC][ÃA]O|DISCRIMINA/i.test(line)) return false;
+    const janela = lines.slice(index, index + 5).join(' ');
+    return /QUANT|QTD|PRE[ÇC]O|P\.?\s*UNIT|UNID/i.test(janela);
+  });
+};
+
 type RawRow = {
   codigo: number;
   descLines: string[];
-  tail: { unidade: string; quantidade: string; unitario: string; total: string } | null;
+  tail: ItemTail | null;
 };
 
 const locateItemRows = (lines: string[]): { rows: RawRow[]; totalTabela: number | null } => {
-  const start = lines.findIndex((line) => /C[ÓO]DIGO/i.test(line) && /DISCRIMINA/i.test(line));
+  const start = findTableStart(lines);
   if (start === -1) return { rows: [], totalTabela: null };
 
   const rows: RawRow[] = [];
   let current: RawRow | null = null;
+  let pendente: string[] = [];
+  let emTituloLote = false;
   let expected = 1;
   let totalTabela: number | null = null;
 
-  for (const line of lines.slice(start + 1)) {
-    const totalMatch = line.match(/^Total\s*:\s*(.+)$/i);
+  for (let i = start + 1; i < lines.length; ) {
+    const line = lines[i];
+
+    const totalMatch = line.match(/^(?:_?\s*)?(?:Total|VALOR TOTAL DOS LOTES)\s*:\s*(.+)$/i);
     if (totalMatch) {
       totalTabela = parseBrazilianNumber(totalMatch[1].trim());
       break;
     }
 
+    // Lote reinicia a numeração e não é descrição de item.
+    if (/^\s*LOTE\s+\d/i.test(line)) {
+      pendente = [];
+      expected = 1;
+      emTituloLote = true;
+      i += 1;
+      continue;
+    }
+    // O título do lote pode virar duas linhas quando o OCR quebra antes do ")".
+    if (emTituloLote) {
+      if (!/^\d/.test(line) && /\)\s*$/.test(line)) {
+        i += 1;
+        continue;
+      }
+      emTituloLote = false;
+    }
+    // "TOTAL" e "I" soltos são sobras do cabeçalho quebrado, antes de qualquer item.
+    if (
+      HEADER_FRAGMENT.test(line) ||
+      (rows.length === 0 && /^\s*(?:TOTAL|I)\s*$/i.test(line)) ||
+      /^(?:www\.|refe|CNPJ:\s*01)/i.test(line)
+    ) {
+      i += 1;
+      continue;
+    }
+
     let content = line;
     const startMatch = line.match(/^(\d{1,3})(?:\s+(.*))?$/);
-
-    // Nova linha: começa com o próximo código esperado. Se a linha anterior ainda não tem cauda
-    // (ilegível), só aceita quando há texto depois do código — assim um item ilegível não "engole"
-    // o seguinte, e um "2" solto no meio de uma descrição não quebra a linha.
+    const codigoLido = startMatch ? Number(startMatch[1]) : null;
+    // O OCR costuma perder um código (1, 3, 4...). Aceita qualquer número próximo do
+    // esperado para não transformar os itens seguintes em descrição do anterior.
     const startsRow =
-      startMatch !== null &&
-      Number(startMatch[1]) === expected &&
-      (!current || current.tail !== null || Boolean(startMatch[2]?.trim()));
+      codigoLido !== null &&
+      codigoLido >= expected &&
+      codigoLido <= expected + 2 &&
+      (!current || current.tail !== null || Boolean(startMatch?.[2]?.trim()));
 
     if (startMatch && startsRow) {
-      current = { codigo: expected, descLines: [], tail: null };
+      current = { codigo: codigoLido!, descLines: [...pendente], tail: null };
       rows.push(current);
-      expected += 1;
+      expected = codigoLido! + 1;
       content = startMatch[2] ?? '';
+      pendente = [];
     }
 
-    if (!current || !content.trim()) continue;
-
-    const tailMatch = content.match(ITEM_TAIL);
-    if (tailMatch && !current.tail) {
-      if (tailMatch[1]?.trim()) current.descLines.push(tailMatch[1].trim());
-      current.tail = {
-        unidade: tailMatch[2],
-        quantidade: tailMatch[3],
-        unitario: tailMatch[4],
-        total: tailMatch[5],
-      };
-    } else if (!current.tail) {
-      current.descLines.push(content.trim());
+    if (!content.trim()) {
+      i += 1;
+      continue;
     }
+
+    const found = matchItemTail(content, lines, i);
+    if (found) {
+      // Se o item anterior já fechou, esta cauda pertence a um novo item (código perdido no OCR).
+      if (!current || current.tail) {
+        current = { codigo: expected, descLines: [...pendente], tail: null };
+        rows.push(current);
+        expected += 1;
+      }
+      if (found.desc) current.descLines.push(found.desc);
+      current.tail = found.tail;
+      pendente = [];
+      i += found.consumed;
+      continue;
+    }
+
+    if (current && !current.tail) current.descLines.push(content.trim());
+    else pendente.push(content.trim());
+    i += 1;
   }
 
   return { rows, totalTabela };
@@ -1025,7 +1171,9 @@ const extractCondicoes = (flat: string): ContratoExtraction['condicoes'] => {
 };
 
 const extractValorTotal = (flat: string): number | null => {
-  const match = flat.match(/valor\s+total\s+(?:deste|do)\s+contrato[^\d]{0,60}?(\d{1,3}(?:\.\d{3})*,\d{2})/i);
+  const match =
+    flat.match(/valor\s+total\s+(?:deste|do)\s+contrato[^\d]{0,60}?(\d{1,3}(?:\.\d{3})*,\d{2})/i) ??
+    flat.match(/valor\s+global\s+de[^\d]{0,30}?(\d{1,3}(?:\.\d{3})*,\d{2})/i);
   return match ? parseBrazilianNumber(match[1]) : null;
 };
 
